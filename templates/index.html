@@ -781,6 +781,8 @@
         currentPr: null,
         repoList: [],        // populated on page load from /api/repos
         refreshRunning: false,
+        githubWebUrl: '',    // populated from /api/config
+        githubOrg: '',       // populated from /api/config
     };
 
     // ---------------------------------------------------------------------------
@@ -1386,8 +1388,8 @@
             // Build summary cards
             const totalRepos = repos.length;
             const totalPRs = overview.total_prs || repos.reduce((s, r) => s + (r.total_prs || 0), 0);
-            const totalMerged = overview.total_merged || repos.reduce((s, r) => s + (r.merged || 0), 0);
-            const totalOpen = overview.total_open || repos.reduce((s, r) => s + (r.open || 0), 0);
+            const totalMerged = overview.total_merged || repos.reduce((s, r) => s + (r.merged || r.merged_prs || 0), 0);
+            const totalOpen = overview.total_open || repos.reduce((s, r) => s + (r.open || r.open_prs || 0), 0);
             const avgCycle = overview.avg_cycle_time || (repos.length ? round(repos.reduce((s, r) => s + (r.avg_cycle_time_hours || 0), 0) / repos.length) : 0);
 
             let html = `
@@ -1479,8 +1481,8 @@
                                     <tr onclick="navigate('#repo/${encodeURIComponent(r.repo_name || r.name)}')">
                                         <td><span class="repo-name-link"><i class="bi bi-folder2 me-1"></i>${esc(r.repo_name || r.name)}</span></td>
                                         <td>${r.total_prs || 0}</td>
-                                        <td><span class="text-success">${r.open || 0}</span></td>
-                                        <td><span style="color: var(--accent-purple)">${r.merged || 0}</span></td>
+                                        <td><span class="text-success">${r.open || r.open_prs || 0}</span></td>
+                                        <td><span style="color: var(--accent-purple)">${r.merged || r.merged_prs || 0}</span></td>
                                         <td>
                                             <span class="${cycleClass(r.avg_cycle_time_hours)}">${fmtDuration(r.avg_cycle_time_hours)}</span>
                                             <small class="text-muted ms-1">(${round(r.avg_cycle_time_hours) || '--'}h)</small>
@@ -1576,15 +1578,15 @@
     // Repo Detail Page
     // ---------------------------------------------------------------------------
 
-    /** Purge a repo's data from the dashboard and navigate back to overview */
+    /** Remove a repo entirely from the dashboard and navigate back to overview */
     async function purgeRepo(repoName) {
-        if (!confirm(`Remove all data for "${repoName}" from the dashboard?`)) return;
+        if (!confirm(`Remove "${repoName}" entirely from the dashboard? This will delete all cached PR data for this repo.`)) return;
         try {
             await fetch(`/api/repo/${encodeURIComponent(repoName)}/purge`, { method: 'POST' });
             state.cachedSummary = null;  // force overview to re-fetch
             navigate('#overview');
         } catch (e) {
-            alert('Failed to clear repo: ' + e.message);
+            alert('Failed to remove repo: ' + e.message);
         }
     }
 
@@ -1611,8 +1613,8 @@
                         <li class="breadcrumb-item"><a href="#overview"><i class="bi bi-grid-1x2 me-1"></i>Overview</a></li>
                         <li class="breadcrumb-item active">${esc(repoName)}</li>
                     </ol>
-                    <button class="btn btn-outline-danger btn-sm" onclick="purgeRepo('${esc(repoName)}')" title="Remove this repo's data from the dashboard">
-                        <i class="bi bi-trash3 me-1"></i>Clear Repo
+                    <button class="btn btn-outline-danger btn-sm" onclick="purgeRepo('${esc(repoName)}')" title="Remove this repo entirely from the dashboard">
+                        <i class="bi bi-trash3 me-1"></i>Remove Repo
                     </button>
                 </nav>
 
@@ -1710,8 +1712,8 @@
                                         <td>${stateBadge(pr.state)}</td>
                                         <td>${fmtDateShort(pr.created_at)}</td>
                                         <td>${fmtDateShort(pr.merged_at)}</td>
-                                        <td data-order="${pr.cycle_time_hours || 0}">
-                                            <span class="${cycleClass(pr.cycle_time_hours)}">${fmtDuration(pr.cycle_time_hours)}</span>
+                                        <td data-order="${pr.total_cycle_time_hours || 0}">
+                                            <span class="${cycleClass(pr.total_cycle_time_hours)}">${fmtDuration(pr.total_cycle_time_hours)}</span>
                                         </td>
                                         <td data-order="${pr.time_to_first_review_hours || 0}">
                                             ${fmtDuration(pr.time_to_first_review_hours)}
@@ -1739,8 +1741,8 @@
 
             // Chart: Top 10 slowest
             const slowest = [...prs]
-                .filter(p => p.cycle_time_hours != null)
-                .sort((a, b) => (b.cycle_time_hours || 0) - (a.cycle_time_hours || 0))
+                .filter(p => p.total_cycle_time_hours != null)
+                .sort((a, b) => (b.total_cycle_time_hours || 0) - (a.total_cycle_time_hours || 0))
                 .slice(0, 10);
 
             destroyChart('chartSlowestPrs');
@@ -1752,8 +1754,8 @@
                     labels: slowest.map(p => `#${p.number}`),
                     datasets: [{
                         label: 'Cycle Time (hours)',
-                        data: slowest.map(p => round(p.cycle_time_hours)),
-                        backgroundColor: slowest.map(p => cycleColor(p.cycle_time_hours)),
+                        data: slowest.map(p => round(p.total_cycle_time_hours)),
+                        backgroundColor: slowest.map(p => cycleColor(p.total_cycle_time_hours)),
                         borderRadius: 4,
                     }],
                 },
@@ -1789,8 +1791,8 @@
 
             // Chart: Time breakdown (stacked bar)
             const breakdownPrs = mergedPrs
-                .filter(p => p.cycle_time_hours != null)
-                .sort((a, b) => (b.cycle_time_hours || 0) - (a.cycle_time_hours || 0))
+                .filter(p => p.total_cycle_time_hours != null)
+                .sort((a, b) => (b.total_cycle_time_hours || 0) - (a.total_cycle_time_hours || 0))
                 .slice(0, 20);
 
             destroyChart('chartTimeBreakdown');
@@ -1808,7 +1810,7 @@
                         },
                         {
                             label: 'Review to Approval',
-                            data: breakdownPrs.map(p => round(p.review_to_approval_hours || 0)),
+                            data: breakdownPrs.map(p => round(p.first_review_to_approval_hours || 0)),
                             backgroundColor: '#3fb9a8',
                             borderRadius: 2,
                         },
@@ -1922,7 +1924,7 @@
             const pr = await apiFetch(`/api/pr/${encodeURIComponent(repoName)}/${prNumber}`);
             const bottlenecks = pr.bottlenecks || pr.bottleneck_flags || [];
             const reviewers = pr.reviewers || pr.reviews || [];
-            const ghUrl = `https://github.com/fusion-e/${encodeURIComponent(repoName)}/pull/${prNumber}`;
+            const ghUrl = `${state.githubWebUrl}/${encodeURIComponent(state.githubOrg)}/${encodeURIComponent(repoName)}/pull/${prNumber}`;
 
             // Build timeline events
             const events = [];
@@ -2046,9 +2048,9 @@
                         <div class="section-card">
                             <h5><i class="bi bi-speedometer2 me-2"></i>Metrics</h5>
                             <div class="list-group list-group-flush">
-                                ${buildMetricRow('Cycle Time', pr.cycle_time_hours, true)}
+                                ${buildMetricRow('Cycle Time', pr.total_cycle_time_hours, true)}
                                 ${buildMetricRow('Time to First Review', pr.time_to_first_review_hours)}
-                                ${buildMetricRow('Review to Approval', pr.review_to_approval_hours)}
+                                ${buildMetricRow('Review to Approval', pr.first_review_to_approval_hours)}
                                 ${buildMetricRow('Approval to Merge', pr.approval_to_merge_hours)}
                                 ${buildMetricRow('Time to Merge', pr.time_to_merge_hours)}
                                 ${buildMetricRow('Review Duration', pr.review_duration_hours)}
@@ -2239,8 +2241,8 @@
                                         <td><span class="badge bg-secondary">${esc(b.type || b.bottleneck_type || '')}</span></td>
                                         <td>${severityBadge(b.severity)}</td>
                                         <td title="${esc(b.description || b.message || '')}">${esc(truncate(b.description || b.message || '', 50))}</td>
-                                        <td data-order="${b.cycle_time_hours || 0}">
-                                            <span class="${cycleClass(b.cycle_time_hours)}">${fmtDuration(b.cycle_time_hours)}</span>
+                                        <td data-order="${b.total_cycle_time_hours || 0}">
+                                            <span class="${cycleClass(b.total_cycle_time_hours)}">${fmtDuration(b.total_cycle_time_hours)}</span>
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -2586,11 +2588,20 @@
     // ---------------------------------------------------------------------------
     // Initialization
     // ---------------------------------------------------------------------------
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         // Set Chart.js global defaults for dark theme
         Chart.defaults.color = '#c9d1d9';
         Chart.defaults.borderColor = 'rgba(48, 54, 61, 0.5)';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
+        // Fetch config (github web URL, org name) for PR links
+        try {
+            const cfg = await apiFetch('/api/config');
+            state.githubWebUrl = (cfg.github_web_url || '').replace(/\/+$/, '');
+            state.githubOrg = cfg.github_org || '';
+        } catch (e) {
+            console.warn('Failed to load config:', e);
+        }
 
         // Default the "From" date to today - 30 days
         const d = new Date();

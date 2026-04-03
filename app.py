@@ -11,6 +11,7 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from flask import Flask, jsonify, render_template, request
 
 from github_collector import (
@@ -20,6 +21,29 @@ from github_collector import (
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
 )
 from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
+
+# ---------------------------------------------------------------------------
+# Derive the GitHub *web* URL from the API URL so the frontend can build
+# clickable PR links.  GHE API URLs look like either:
+#   https://HOSTNAME/api/v3   or   https://api.HOSTNAME
+# For public GitHub the web URL is simply https://github.com.
+# Users can override by setting GITHUB_WEB_URL in the environment.
+# ---------------------------------------------------------------------------
+def _derive_github_web_url(api_base: str) -> str:
+    explicit = os.environ.get("GITHUB_WEB_URL", "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    parsed = urlparse(api_base)
+    host = parsed.hostname or ""
+    scheme = parsed.scheme or "https"
+    # https://api.github.com  ->  https://github.com
+    # https://api.ghe.corp    ->  https://ghe.corp
+    if host.startswith("api."):
+        return f"{scheme}://{host[4:]}"
+    # https://ghe.corp/api/v3  ->  https://ghe.corp
+    return f"{scheme}://{host}"
+
+GITHUB_WEB_URL = _derive_github_web_url(GITHUB_API_BASE)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -157,6 +181,7 @@ def api_config():
     """Return the current configuration (non-sensitive)."""
     return jsonify({
         "github_api_url": GITHUB_API_BASE,
+        "github_web_url": GITHUB_WEB_URL,
         "github_org": ORG_NAME,
         "repo_prefix": REPO_PREFIX,
         "default_lookback_days": DEFAULT_PR_LOOKBACK_DAYS,

@@ -1575,6 +1575,19 @@
     // ---------------------------------------------------------------------------
     // Repo Detail Page
     // ---------------------------------------------------------------------------
+
+    /** Purge a repo's data from the dashboard and navigate back to overview */
+    async function purgeRepo(repoName) {
+        if (!confirm(`Remove all data for "${repoName}" from the dashboard?`)) return;
+        try {
+            await fetch(`/api/repo/${encodeURIComponent(repoName)}/purge`, { method: 'POST' });
+            state.cachedSummary = null;  // force overview to re-fetch
+            navigate('#overview');
+        } catch (e) {
+            alert('Failed to clear repo: ' + e.message);
+        }
+    }
+
     async function loadRepoDetail(repoName) {
         state.currentRepo = repoName;
         const container = document.getElementById('repoDetailContent');
@@ -1593,11 +1606,14 @@
 
             let html = `
                 <!-- Breadcrumb -->
-                <nav class="breadcrumb-custom" aria-label="breadcrumb">
-                    <ol class="breadcrumb">
+                <nav class="breadcrumb-custom d-flex justify-content-between align-items-center" aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
                         <li class="breadcrumb-item"><a href="#overview"><i class="bi bi-grid-1x2 me-1"></i>Overview</a></li>
                         <li class="breadcrumb-item active">${esc(repoName)}</li>
                     </ol>
+                    <button class="btn btn-outline-danger btn-sm" onclick="purgeRepo('${esc(repoName)}')" title="Remove this repo's data from the dashboard">
+                        <i class="bi bi-trash3 me-1"></i>Clear Repo
+                    </button>
                 </nav>
 
                 <!-- Summary Cards -->
@@ -2575,6 +2591,11 @@
         Chart.defaults.color = '#c9d1d9';
         Chart.defaults.borderColor = 'rgba(48, 54, 61, 0.5)';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
+        // Default the "From" date to today - 30 days
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        document.getElementById('filterSince').value = d.toISOString().slice(0, 10);
 
         // Load repo list for filter dropdown (non-blocking)
         loadRepoList();

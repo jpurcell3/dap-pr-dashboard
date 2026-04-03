@@ -482,6 +482,42 @@ def api_repo(repo_name: str):
     return jsonify({"repo_summary": repo_summary, "prs": prs})
 
 
+# 5b. Purge a single repo -----------------------------------------------------
+@app.route("/api/repo/<repo_name>/purge", methods=["POST", "DELETE"])
+def api_repo_purge(repo_name: str):
+    """Remove all cached data for a repository and re-save the cache."""
+    if not _data_store["loaded"]:
+        return jsonify({"error": "No data loaded"}), 400
+
+    # Check the repo actually has data
+    if repo_name not in _data_store.get("raw_prs", {}):
+        return jsonify({"error": f"No data for '{repo_name}'"}), 404
+
+    # Remove from every section of the data store
+    _data_store["raw_prs"].pop(repo_name, None)
+    _data_store["pr_metrics"].pop(repo_name, None)
+    _data_store["repo_summaries"] = [
+        s for s in _data_store["repo_summaries"]
+        if s.get("repo") != repo_name
+    ]
+    _data_store["bottlenecks"] = [
+        b for b in _data_store["bottlenecks"]
+        if b.get("repo") != repo_name
+    ]
+
+    # Persist updated cache
+    cache_payload = {
+        "raw_prs": _data_store["raw_prs"],
+        "repo_summaries": _data_store["repo_summaries"],
+        "pr_metrics": _data_store["pr_metrics"],
+        "bottlenecks": _data_store["bottlenecks"],
+    }
+    save_cache(cache_payload, CACHE_PATH)
+    logger.info("Purged repo '%s' from data store and cache.", repo_name)
+
+    return jsonify({"status": "purged", "repo": repo_name})
+
+
 # 6. Single PR detail ---------------------------------------------------------
 @app.route("/api/pr/<repo_name>/<int:pr_number>")
 def api_pr(repo_name: str, pr_number: int):

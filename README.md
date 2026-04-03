@@ -1,4 +1,4 @@
-# Fusion PR Dashboard
+# DAP PR Dashboard
 
 A Flask web app that aggregates pull request data from GitHub / GitHub Enterprise and displays cycle-time metrics, bottleneck detection, CI/CD check status, and commit details.
 

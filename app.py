@@ -1,9 +1,9 @@
 """
-Flask web server for the Fusion PR Metrics Dashboard.
+Flask web server for the DAP PR Dashboard.
 
 Serves a dashboard UI and exposes JSON APIs for PR metrics,
 bottleneck detection, and repository summaries sourced from
-the fusion-e GitHub organisation.
+GitHub / GitHub Enterprise.
 """
 
 import logging

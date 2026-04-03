@@ -266,6 +266,18 @@ def get_fusion_repos(token: str | None = None) -> list[str]:
     return filtered_repos
 
 
+def get_all_org_repos(token: str | None = None) -> list[str]:
+    """Return a sorted list of *every* repo name in the configured org."""
+    headers = _build_headers(token)
+    url = f"{GITHUB_API_BASE}/orgs/{ORG_NAME}/repos"
+    params = {"per_page": 100, "type": "all"}
+
+    all_repos = _get_paginated(url, headers, params)
+    names = sorted(repo["name"] for repo in all_repos if repo.get("name"))
+    logger.info("Found %d total repos in %s.", len(names), ORG_NAME)
+    return names
+
+
 # ---------------------------------------------------------------------------
 # PR fetching
 # ---------------------------------------------------------------------------

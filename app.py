@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, render_template, request
 
 from github_collector import (
-    fetch_all_data, get_fusion_repos, load_cache, save_cache,
+    fetch_all_data, get_fusion_repos, get_all_org_repos, load_cache, save_cache,
     rate_limit_info, cancel_refresh, RefreshCancelled,
     GITHUB_API_BASE, ORG_NAME, REPO_PREFIX,
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
@@ -168,24 +168,57 @@ def api_config():
 # 2. List repos ---------------------------------------------------------------
 @app.route("/api/repos")
 def api_repos():
-    """Return a JSON list of fusion-* repository names.
+    """Return repos with priority metadata for the repo picker.
 
-    By default only repos that have PR data in the current data store are
-    returned.  Pass ``?all=true`` to include every discovered repo (useful
-    for the refresh repo-picker).
+    By default only repos that have PR data are returned (simple string
+    list for backward compatibility).
+
+    Query parameters
+    ----------------
+    all : bool
+        ``true`` returns **every** repo in the org as objects with
+        priority metadata: ``{name, priority, has_data, pr_count,
+        prefix_match}``.  The list is sorted by descending priority.
     """
     try:
         show_all = request.args.get("all", "").lower() in ("true", "1", "yes")
-        repos = get_fusion_repos()
 
-        if not show_all and _data_store["loaded"]:
-            repos_with_data = {
-                name for name, prs in _data_store.get("raw_prs", {}).items()
-                if prs
-            }
-            repos = [r for r in repos if r in repos_with_data]
+        if not show_all:
+            # Simple mode: only repos with data (string list)
+            repos = get_fusion_repos()
+            if _data_store["loaded"]:
+                repos_with_data = {
+                    name for name, prs in _data_store.get("raw_prs", {}).items()
+                    if prs
+                }
+                repos = [r for r in repos if r in repos_with_data]
+            return jsonify(repos)
 
-        return jsonify(repos)
+        # Full mode: all org repos with priority scoring
+        all_names = get_all_org_repos()
+        raw_prs = _data_store.get("raw_prs", {}) if _data_store["loaded"] else {}
+
+        scored: list[dict] = []
+        for name in all_names:
+            prs = raw_prs.get(name, [])
+            pr_count = len(prs) if prs else 0
+            has_data = pr_count > 0
+            prefix_match = name.lower().startswith(REPO_PREFIX) if REPO_PREFIX else False
+
+            # Priority: repos with data first, then prefix matches, then alphabetical
+            priority = (2 if has_data else 0) + (1 if prefix_match else 0)
+
+            scored.append({
+                "name": name,
+                "priority": priority,
+                "has_data": has_data,
+                "pr_count": pr_count,
+                "prefix_match": prefix_match,
+            })
+
+        scored.sort(key=lambda r: (-r["priority"], r["name"]))
+        return jsonify(scored)
+
     except Exception as exc:
         logger.exception("Error fetching repo list")
         return jsonify({"error": str(exc)}), 500

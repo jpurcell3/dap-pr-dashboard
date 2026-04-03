@@ -1212,6 +1212,8 @@
         refreshData(opts);
     }
 
+    const REPO_VISIBLE_LIMIT = 20;
+
     /** Toggle all repo checkboxes (only visible/filtered ones) */
     function toggleAllRepos(checked) {
         document.querySelectorAll('#repoChecklist .form-check').forEach(row => {
@@ -1221,14 +1223,29 @@
         });
     }
 
-    /** Filter the repo checklist by search text */
+    /** Filter the repo checklist by search text.
+     *  When a query is active every matching repo is shown (ignoring the
+     *  20-item default cap).  When the query is cleared the list reverts
+     *  to the top 20 by priority. */
     function filterRepoChecklist(query) {
         const q = query.toLowerCase().trim();
-        document.querySelectorAll('#repoChecklist .form-check').forEach(row => {
+        const rows = document.querySelectorAll('#repoChecklist .form-check');
+        let visibleCount = 0;
+        rows.forEach(row => {
             const label = row.querySelector('.form-check-label');
             const name = label ? label.textContent.toLowerCase() : '';
-            row.style.display = (!q || name.includes(q)) ? '' : 'none';
+            if (q) {
+                // Search mode: show all matches
+                row.style.display = name.includes(q) ? '' : 'none';
+            } else {
+                // Default mode: show top REPO_VISIBLE_LIMIT by priority
+                const isOverflow = row.dataset.overflow === 'true';
+                row.style.display = isOverflow ? 'none' : '';
+            }
         });
+        // Update the counter badge
+        const badge = document.getElementById('repoOverflowBadge');
+        if (badge) badge.style.display = q ? 'none' : '';
     }
 
     /** Clear date and repo filter inputs */
@@ -1240,38 +1257,55 @@
         toggleAllRepos(false);
     }
 
-    /** Populate the repo checklist from state.repoList */
+    /** Populate the repo checklist from state.repoList (objects with priority metadata) */
     function populateRepoChecklist() {
         const container = document.getElementById('repoChecklist');
         if (!state.repoList || state.repoList.length === 0) {
             container.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.8rem;">No repos found</div>';
             return;
         }
-        container.innerHTML = state.repoList.map(name => `
-            <div class="form-check">
+
+        const overflowCount = Math.max(0, state.repoList.length - REPO_VISIBLE_LIMIT);
+
+        container.innerHTML = state.repoList.map((repo, idx) => {
+            const name = typeof repo === 'string' ? repo : repo.name;
+            const hasData = (typeof repo === 'object') ? repo.has_data : false;
+            const prefixMatch = (typeof repo === 'object') ? repo.prefix_match : false;
+            const isOverflow = idx >= REPO_VISIBLE_LIMIT;
+
+            // Small visual hint for repos that already have data
+            const badge = hasData
+                ? ' <span class="badge bg-info bg-opacity-25 text-info" style="font-size:0.65rem;vertical-align:middle;">synced</span>'
+                : '';
+
+            return `<div class="form-check${isOverflow ? '' : ''}" data-overflow="${isOverflow}" style="${isOverflow ? 'display:none' : ''}">
                 <input class="form-check-input" type="checkbox" value="${esc(name)}" id="repo_cb_${esc(name)}">
-                <label class="form-check-label" for="repo_cb_${esc(name)}">${esc(name)}</label>
-            </div>
-        `).join('');
+                <label class="form-check-label" for="repo_cb_${esc(name)}">${esc(name)}${badge}</label>
+            </div>`;
+        }).join('');
+
+        if (overflowCount > 0) {
+            container.insertAdjacentHTML('beforeend',
+                `<div class="text-center py-1" id="repoOverflowBadge" style="font-size:0.75rem;color:#8b949e;">
+                    <i class="bi bi-search me-1"></i>${overflowCount} more — use search above
+                </div>`);
+        }
     }
 
     /** Load repo list for the filter dropdown */
     async function loadRepoList() {
         try {
             const data = await apiFetch('/api/repos?all=true');
-            // /api/repos?all=true returns every discovered repo for the checklist
+            // /api/repos?all=true returns objects sorted by priority
             if (Array.isArray(data)) {
-                state.repoList = data.map(r => (typeof r === 'string') ? r : (r.repo_name || r.name || ''));
-            } else if (data.repos) {
-                state.repoList = data.repos.map(r => (typeof r === 'string') ? r : (r.repo_name || r.name || ''));
+                state.repoList = data;  // keep full objects for priority/metadata
             }
-            state.repoList.sort((a, b) => a.localeCompare(b));
             populateRepoChecklist();
         } catch (e) {
             console.warn('Could not load repo list for filter:', e);
             // Fall back: try to get repos from cached summary
             if (state.cachedSummary && state.cachedSummary.repo_summaries) {
-                state.repoList = state.cachedSummary.repo_summaries.map(r => r.repo_name || r.name).sort();
+                state.repoList = state.cachedSummary.repo_summaries.map(r => ({ name: r.repo_name || r.name, priority: 1, has_data: true, prefix_match: true }));
                 populateRepoChecklist();
             }
         }

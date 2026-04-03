@@ -1,0 +1,2537 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusion PR Dashboard</title>
+
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- DataTables Bootstrap 5 CSS -->
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --bs-body-bg: #0d1117;
+            --bs-body-color: #c9d1d9;
+            --card-bg: #161b22;
+            --card-border: #30363d;
+            --accent-blue: #58a6ff;
+            --accent-teal: #3fb9a8;
+            --accent-green: #3fb950;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #bc8cff;
+            --hover-bg: #1c2128;
+            --nav-bg: #010409;
+        }
+
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        }
+
+        /* Navbar */
+        .navbar-custom {
+            background-color: var(--nav-bg);
+            border-bottom: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+        }
+
+        .navbar-custom .navbar-brand {
+            color: #f0f6fc;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .navbar-custom .navbar-brand i {
+            color: var(--accent-teal);
+        }
+
+        .navbar-custom .nav-link {
+            color: var(--bs-body-color);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: background-color 0.15s ease;
+        }
+
+        .navbar-custom .nav-link:hover,
+        .navbar-custom .nav-link.active {
+            color: #f0f6fc;
+            background-color: var(--hover-bg);
+        }
+
+        .navbar-custom .nav-link.active {
+            border-bottom: 2px solid var(--accent-teal);
+        }
+
+        /* Cards */
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8b949e;
+            margin-top: 0.25rem;
+        }
+
+        .stat-card .stat-icon {
+            font-size: 1.5rem;
+            opacity: 0.7;
+        }
+
+        /* Section card */
+        .section-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-card h5 {
+            color: #f0f6fc;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* Tables */
+        .table-dark-custom {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--bs-body-color);
+            --bs-table-border-color: var(--card-border);
+            --bs-table-hover-bg: var(--hover-bg);
+            --bs-table-hover-color: #f0f6fc;
+        }
+
+        .table-dark-custom thead th {
+            background-color: rgba(22, 27, 34, 0.8);
+            color: #8b949e;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--card-border);
+            white-space: nowrap;
+        }
+
+        .table-dark-custom tbody tr {
+            cursor: pointer;
+            transition: background-color 0.1s ease;
+        }
+
+        .table-dark-custom tbody tr:hover {
+            background-color: var(--hover-bg) !important;
+        }
+
+        /* DataTables overrides for dark theme */
+        .dataTables_wrapper .dataTables_filter input,
+        .dataTables_wrapper .dataTables_length select {
+            background-color: #0d1117 !important;
+            border: 1px solid var(--card-border) !important;
+            color: var(--bs-body-color) !important;
+            border-radius: 6px !important;
+            padding: 0.375rem 0.75rem !important;
+        }
+
+        .dataTables_wrapper .dataTables_filter label,
+        .dataTables_wrapper .dataTables_length label,
+        .dataTables_wrapper .dataTables_info {
+            color: #8b949e !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: var(--bs-body-color) !important;
+            background: transparent !important;
+            border: 1px solid var(--card-border) !important;
+            border-radius: 6px !important;
+            margin: 0 2px !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+            background: var(--hover-bg) !important;
+            color: #f0f6fc !important;
+            border-color: var(--accent-blue) !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: var(--accent-blue) !important;
+            color: #fff !important;
+            border-color: var(--accent-blue) !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            color: #484f58 !important;
+            opacity: 0.5;
+        }
+
+        div.dataTables_wrapper div.dataTables_filter {
+            text-align: right;
+        }
+
+        /* Badges */
+        .badge-severity-high {
+            background-color: var(--accent-red);
+            color: #fff;
+        }
+
+        .badge-severity-medium {
+            background-color: var(--accent-yellow);
+            color: #000;
+        }
+
+        .badge-severity-low {
+            background-color: var(--accent-blue);
+            color: #fff;
+        }
+
+        .badge-state-open {
+            background-color: var(--accent-green);
+            color: #fff;
+        }
+
+        .badge-state-merged {
+            background-color: var(--accent-purple);
+            color: #fff;
+        }
+
+        .badge-state-closed {
+            background-color: var(--accent-red);
+            color: #fff;
+        }
+
+        /* Cycle time color coding */
+        .cycle-fast { color: var(--accent-green); font-weight: 600; }
+        .cycle-medium { color: var(--accent-yellow); font-weight: 600; }
+        .cycle-slow { color: var(--accent-red); font-weight: 600; }
+
+        /* Breadcrumb */
+        .breadcrumb-custom {
+            background: transparent;
+            padding: 0;
+            margin-bottom: 1.5rem;
+        }
+
+        .breadcrumb-custom .breadcrumb-item a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        .breadcrumb-custom .breadcrumb-item a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb-custom .breadcrumb-item.active {
+            color: #f0f6fc;
+            font-weight: 600;
+        }
+
+        .breadcrumb-custom .breadcrumb-item + .breadcrumb-item::before {
+            color: #484f58;
+            content: "\F285";
+            font-family: "bootstrap-icons";
+            font-size: 0.75rem;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding: 1rem 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--card-border);
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-left: 56px;
+            padding-bottom: 1.5rem;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 16px;
+            top: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            border: 2px solid var(--card-bg);
+        }
+
+        .timeline-dot.dot-created { background-color: var(--accent-green); }
+        .timeline-dot.dot-reviewed { background-color: var(--accent-teal); }
+        .timeline-dot.dot-approved { background-color: var(--accent-blue); }
+        .timeline-dot.dot-merged { background-color: var(--accent-purple); }
+        .timeline-dot.dot-closed { background-color: var(--accent-red); }
+
+        .timeline-duration {
+            position: absolute;
+            left: 0;
+            top: 28px;
+            width: 48px;
+            text-align: center;
+            font-size: 0.7rem;
+            color: #8b949e;
+            line-height: 1.2;
+        }
+
+        .timeline-content {
+            background-color: rgba(22, 27, 34, 0.5);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+        }
+
+        .timeline-content .event-type {
+            font-weight: 600;
+            color: #f0f6fc;
+            font-size: 0.9rem;
+        }
+
+        .timeline-content .event-time {
+            color: #8b949e;
+            font-size: 0.8rem;
+        }
+
+        .timeline-content .event-detail {
+            color: #8b949e;
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        /* View transitions */
+        .view {
+            display: none;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Spinner overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(13, 17, 23, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            text-align: center;
+        }
+
+        .loading-spinner .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: var(--accent-teal);
+        }
+
+        .loading-spinner p {
+            color: #8b949e;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        /* Inline loading */
+        .section-loading {
+            text-align: center;
+            padding: 3rem;
+            color: #8b949e;
+        }
+
+        /* Refresh status */
+        .refresh-status {
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        /* Bottleneck alert cards */
+        .bottleneck-alert {
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid;
+        }
+
+        .bottleneck-alert.severity-high {
+            background-color: rgba(248, 81, 73, 0.1);
+            border-left-color: var(--accent-red);
+        }
+
+        .bottleneck-alert.severity-medium {
+            background-color: rgba(210, 153, 34, 0.1);
+            border-left-color: var(--accent-yellow);
+        }
+
+        .bottleneck-alert.severity-low {
+            background-color: rgba(88, 166, 255, 0.1);
+            border-left-color: var(--accent-blue);
+        }
+
+        /* Chart container */
+        .chart-container {
+            position: relative;
+            width: 100%;
+        }
+
+        /* Additions / Deletions */
+        .additions { color: var(--accent-green); }
+        .deletions { color: var(--accent-red); }
+
+        /* Reviewer list */
+        .reviewer-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .reviewer-item:last-child {
+            border-bottom: none;
+        }
+
+        .reviewer-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #fff;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        /* Filter bar */
+        .filter-bar .form-select,
+        .filter-bar .form-control {
+            background-color: #0d1117;
+            border-color: var(--card-border);
+            color: var(--bs-body-color);
+        }
+
+        .filter-bar .form-select:focus,
+        .filter-bar .form-control:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.15);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bs-body-bg); }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+        /* Main content area */
+        .main-content {
+            padding: 1.5rem 0;
+            min-height: calc(100vh - 60px);
+        }
+
+        /* PR info grid */
+        .pr-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .pr-info-item label {
+            font-size: 0.75rem;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .pr-info-item span {
+            color: #f0f6fc;
+            font-weight: 500;
+        }
+
+        /* Repo name in table */
+        .repo-name-link {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .repo-name-link:hover {
+            text-decoration: underline;
+            color: #79c0ff;
+        }
+
+        /* Refresh status widget (bottom-right floating) */
+        .refresh-status-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            width: 340px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            font-size: 0.85rem;
+        }
+        .refresh-status-widget hr { border-color: var(--card-border); }
+        .refresh-status-widget .rate-green { color: var(--accent-green); }
+        .refresh-status-widget .rate-yellow { color: var(--accent-yellow); }
+        .refresh-status-widget .rate-red { color: var(--accent-red); }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin-animation { animation: spin 1s linear infinite; display: inline-block; }
+
+        /* Refresh options dropdown panel */
+        .refresh-options-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 1rem;
+            width: 360px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .refresh-options-panel label {
+            color: #8b949e;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .refresh-options-panel .form-control,
+        .refresh-options-panel .form-select {
+            background-color: #0d1117;
+            border: 1px solid var(--card-border);
+            color: var(--bs-body-color);
+            font-size: 0.85rem;
+        }
+        .refresh-options-panel .form-control:focus,
+        .refresh-options-panel .form-select:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 0.2rem rgba(88,166,255,0.15);
+        }
+        /* Dark-theme date input icon fix */
+        .refresh-options-panel input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.8);
+            cursor: pointer;
+        }
+        .repo-checklist {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            background: #0d1117;
+        }
+        .repo-checklist .form-check {
+            padding: 0.35rem 0.75rem 0.35rem 2rem;
+            margin: 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .repo-checklist .form-check:last-child { border-bottom: none; }
+        .repo-checklist .form-check-label { color: var(--bs-body-color); font-size: 0.85rem; cursor: pointer; }
+        .repo-checklist .form-check-input { background-color: #0d1117; border-color: var(--card-border); }
+        .repo-checklist .form-check-input:checked { background-color: var(--accent-blue); border-color: var(--accent-blue); }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Overlay (only used for first-load when no data exists) -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner-border" role="status"></div>
+            <p id="refreshProgressText">Refreshing data...</p>
+            <p id="refreshProgressDetail" class="text-muted small"></p>
+        </div>
+    </div>
+
+    <!-- Persistent refresh status widget (bottom-right) -->
+    <div class="refresh-status-widget" id="refreshWidget" style="display:none;">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <strong><i class="bi bi-arrow-clockwise spin-animation me-1"></i>Refreshing</strong>
+            <div class="d-flex align-items-center gap-2">
+                <span id="widgetScope" class="badge bg-info small"></span>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="cancelRefresh()" title="Cancel refresh" id="btnCancel">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        <p id="widgetProgress" class="mb-1 small">Starting...</p>
+        <p id="widgetDetail" class="mb-1 small text-muted"></p>
+        <hr class="my-1" style="border-color: #30363d;">
+        <p id="widgetRateLimit" class="mb-0 small"></p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#overview">
+                <i class="bi bi-git me-2"></i>Fusion PR Dashboard
+            </a>
+            <button class="navbar-toggler border-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#overview" id="navOverview">
+                            <i class="bi bi-grid-1x2 me-1"></i>Overview
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#bottlenecks" id="navBottlenecks">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sync" id="navSync">
+                            <i class="bi bi-arrow-repeat me-1"></i>Sync
+                            <span class="badge bg-success ms-1" id="navSyncBadge" style="display:none;font-size:0.65rem;">LIVE</span>
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="refresh-status" id="refreshStatus">
+                        <i class="bi bi-clock me-1"></i>Last refreshed: --
+                    </span>
+                    <!-- Refresh button group with options dropdown -->
+                    <div class="btn-group" id="refreshBtnGroup">
+                        <button class="btn btn-sm btn-outline-info" id="btnRefresh" onclick="refreshData()">
+                            <i class="bi bi-arrow-clockwise me-1" id="refreshIcon"></i>Refresh All
+                        </button>
+                        <button class="btn btn-sm btn-outline-info dropdown-toggle dropdown-toggle-split"
+                                id="btnRefreshOptions" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                aria-expanded="false">
+                            <span class="visually-hidden">Toggle options</span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-0 border-0 bg-transparent" id="refreshDropdown">
+                            <div class="refresh-options-panel">
+                                <h6 class="mb-3" style="color:#f0f6fc;"><i class="bi bi-sliders me-1"></i>Refresh Options</h6>
+
+                                <!-- Date range -->
+                                <label class="form-label mb-1">Date Range</label>
+                                <div class="input-group input-group-sm mb-2">
+                                    <span class="input-group-text" style="background:#0d1117;border-color:var(--card-border);color:#8b949e;">From</span>
+                                    <input type="date" class="form-control" id="filterSince">
+                                </div>
+                                <div class="input-group input-group-sm mb-3">
+                                    <span class="input-group-text" style="background:#0d1117;border-color:var(--card-border);color:#8b949e;">To</span>
+                                    <input type="date" class="form-control" id="filterUntil">
+                                </div>
+
+                                <!-- Repo selection -->
+                                <label class="form-label mb-1">Repositories</label>
+                                <div class="mb-2">
+                                    <div class="d-flex gap-2 mb-1">
+                                        <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(true)">Select All</button>
+                                        <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(false)">Clear All</button>
+                                    </div>
+                                    <div class="repo-checklist" id="repoChecklist">
+                                        <div class="text-muted text-center py-2" style="font-size:0.8rem;">Loading repos...</div>
+                                    </div>
+                                </div>
+
+                                <!-- Action buttons -->
+                                <div class="d-grid gap-2 mt-3">
+                                    <button class="btn btn-info btn-sm" onclick="refreshSelected()">
+                                        <i class="bi bi-funnel me-1"></i>Refresh Selected
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="clearRefreshFilters()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid main-content">
+
+        <!-- Overview View -->
+        <div class="view active" id="viewOverview">
+            <div id="overviewContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading overview data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repo Detail View -->
+        <div class="view" id="viewRepoDetail">
+            <div id="repoDetailContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading repository data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PR Detail View -->
+        <div class="view" id="viewPrDetail">
+            <div id="prDetailContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading PR data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottlenecks View -->
+        <div class="view" id="viewBottlenecks">
+            <div id="bottlenecksContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading bottleneck data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sync / Refresh Status View -->
+        <div class="view" id="viewSync">
+            <div id="syncContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading sync status...</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- jQuery (required by DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap 5.3 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js 4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <!-- DataTables -->
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+    /* =========================================================================
+       Fusion PR Dashboard - Main Application Script
+       ========================================================================= */
+
+    // ---------------------------------------------------------------------------
+    // Global state
+    // ---------------------------------------------------------------------------
+    const state = {
+        charts: {},          // active Chart.js instances keyed by canvas id
+        dataTables: {},      // active DataTable instances keyed by table id
+        cachedSummary: null, // cached /api/summary response
+        currentRepo: null,
+        currentPr: null,
+        repoList: [],        // populated on page load from /api/repos
+        refreshRunning: false,
+    };
+
+    // ---------------------------------------------------------------------------
+    // Utility helpers
+    // ---------------------------------------------------------------------------
+
+    /** Format hours into human-readable duration string */
+    function fmtDuration(hours) {
+        if (hours == null || isNaN(hours)) return '--';
+        hours = parseFloat(hours);
+        if (hours < 0) return '--';
+        if (hours >= 24) {
+            const d = Math.floor(hours / 24);
+            const h = Math.round(hours % 24);
+            return `${d}d ${h}h`;
+        }
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        if (h === 0) return `${m}m`;
+        return `${h}h ${m}m`;
+    }
+
+    /** Return a CSS class for cycle-time color coding */
+    function cycleClass(hours) {
+        if (hours == null || isNaN(hours)) return '';
+        hours = parseFloat(hours);
+        if (hours <= 24) return 'cycle-fast';
+        if (hours <= 72) return 'cycle-medium';
+        return 'cycle-slow';
+    }
+
+    /** Return a color hex for cycle-time values (for charts) */
+    function cycleColor(hours) {
+        if (hours == null) return '#8b949e';
+        hours = parseFloat(hours);
+        if (hours <= 24) return '#3fb950';
+        if (hours <= 72) return '#d29922';
+        return '#f85149';
+    }
+
+    /** Badge HTML for PR state */
+    function stateBadge(st) {
+        if (!st) return '';
+        const s = st.toLowerCase();
+        if (s === 'merged') return '<span class="badge badge-state-merged"><i class="bi bi-git me-1"></i>Merged</span>';
+        if (s === 'open')   return '<span class="badge badge-state-open"><i class="bi bi-record-circle me-1"></i>Open</span>';
+        if (s === 'closed') return '<span class="badge badge-state-closed"><i class="bi bi-x-circle me-1"></i>Closed</span>';
+        return `<span class="badge bg-secondary">${st}</span>`;
+    }
+
+    /** Badge HTML for severity */
+    function severityBadge(sev) {
+        if (!sev) return '';
+        const s = sev.toLowerCase();
+        const cls = s === 'high' ? 'badge-severity-high' : s === 'medium' ? 'badge-severity-medium' : 'badge-severity-low';
+        return `<span class="badge ${cls}">${sev}</span>`;
+    }
+
+    /** Format ISO date string nicely */
+    function fmtDate(iso) {
+        if (!iso) return '--';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+               ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /** Short date for tables */
+    function fmtDateShort(iso) {
+        if (!iso) return '--';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    /** Safely get a nested property */
+    function get(obj, path, def) {
+        const val = path.split('.').reduce((o, k) => (o || {})[k], obj);
+        return val != null ? val : def;
+    }
+
+    /** Destroy a Chart.js chart by canvas id if it exists */
+    function destroyChart(id) {
+        if (state.charts[id]) {
+            state.charts[id].destroy();
+            delete state.charts[id];
+        }
+    }
+
+    /** Destroy a DataTable by table id if it exists */
+    function destroyTable(id) {
+        if (state.dataTables[id]) {
+            state.dataTables[id].destroy();
+            delete state.dataTables[id];
+        }
+    }
+
+    /** Round a number to given decimals */
+    function round(v, d = 1) {
+        if (v == null || isNaN(v)) return null;
+        return Math.round(parseFloat(v) * Math.pow(10, d)) / Math.pow(10, d);
+    }
+
+    /** Escape HTML */
+    function esc(str) {
+        if (!str) return '';
+        const el = document.createElement('span');
+        el.textContent = str;
+        return el.innerHTML;
+    }
+
+    /** Truncate text */
+    function truncate(str, len = 60) {
+        if (!str) return '';
+        return str.length > len ? str.substring(0, len) + '...' : str;
+    }
+
+    /** Generic Chart.js default options for dark theme */
+    function chartDefaults() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#c9d1d9', font: { size: 12 } } },
+                tooltip: {
+                    backgroundColor: '#1c2128',
+                    titleColor: '#f0f6fc',
+                    bodyColor: '#c9d1d9',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    cornerRadius: 6,
+                    padding: 10,
+                },
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8b949e', font: { size: 11 } },
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                },
+                y: {
+                    ticks: { color: '#8b949e', font: { size: 11 } },
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                },
+            },
+        };
+    }
+
+    // ---------------------------------------------------------------------------
+    // API helpers
+    // ---------------------------------------------------------------------------
+    async function apiFetch(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`API error: ${resp.status} ${resp.statusText}`);
+        return resp.json();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Router
+    // ---------------------------------------------------------------------------
+    function navigate(hash) {
+        if (window.location.hash !== hash) {
+            window.location.hash = hash;
+        } else {
+            handleRoute();
+        }
+    }
+
+    function handleRoute() {
+        const hash = window.location.hash || '#overview';
+        const parts = hash.replace('#', '').split('/');
+        const view = parts[0];
+
+        // Hide all views
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+        // Reset nav active
+        document.querySelectorAll('.navbar-custom .nav-link').forEach(l => l.classList.remove('active'));
+
+        switch (view) {
+            case 'repo':
+                if (parts[1]) {
+                    showView('viewRepoDetail');
+                    loadRepoDetail(decodeURIComponent(parts[1]));
+                } else {
+                    showView('viewOverview');
+                    document.getElementById('navOverview').classList.add('active');
+                    loadOverview();
+                }
+                break;
+            case 'pr':
+                if (parts[1] && parts[2]) {
+                    showView('viewPrDetail');
+                    loadPrDetail(decodeURIComponent(parts[1]), parts[2]);
+                } else {
+                    showView('viewOverview');
+                    document.getElementById('navOverview').classList.add('active');
+                    loadOverview();
+                }
+                break;
+            case 'bottlenecks':
+                showView('viewBottlenecks');
+                document.getElementById('navBottlenecks').classList.add('active');
+                loadBottlenecks();
+                break;
+            case 'sync':
+                showView('viewSync');
+                document.getElementById('navSync').classList.add('active');
+                loadSyncView();
+                break;
+            default:
+                showView('viewOverview');
+                document.getElementById('navOverview').classList.add('active');
+                loadOverview();
+                break;
+        }
+    }
+
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const el = document.getElementById(id);
+        if (el) el.classList.add('active');
+    }
+
+    window.addEventListener('hashchange', handleRoute);
+
+    // ---------------------------------------------------------------------------
+    // Data Refresh
+    // ---------------------------------------------------------------------------
+
+    /** Build the refresh API URL from options */
+    function buildRefreshUrl(options = {}) {
+        const params = new URLSearchParams();
+        if (options.repos && options.repos.length > 0) {
+            params.set('repo', options.repos.join(','));
+        }
+        if (options.since) params.set('since', options.since);
+        if (options.until) params.set('until', options.until);
+        const qs = params.toString();
+        return '/api/refresh' + (qs ? '?' + qs : '');
+    }
+
+    /** Gather date-range values from the filter inputs */
+    function getDateRangeOptions() {
+        const opts = {};
+        const since = document.getElementById('filterSince')?.value;
+        const until = document.getElementById('filterUntil')?.value;
+        if (since) opts.since = since;
+        if (until) opts.until = until;
+        return opts;
+    }
+
+    /** Cancel a running refresh */
+    async function cancelRefresh() {
+        try {
+            const btn = document.getElementById('btnCancel');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            await apiFetch('/api/refresh/cancel');
+            showToast('Refresh cancelled.', 'warning');
+        } catch (err) {
+            showToast('Cancel failed: ' + err.message, 'danger');
+        }
+    }
+
+    /** Called by "Refresh All" main button */
+    async function refreshData(options = {}) {
+        if (state.refreshRunning) {
+            showToast('A refresh is already running', 'warning');
+            return;
+        }
+
+        // Merge in date range if set and no explicit repos
+        if (!options.repos) {
+            Object.assign(options, getDateRangeOptions());
+        }
+
+        // Close the dropdown if open
+        const dd = bootstrap.Dropdown.getInstance(document.getElementById('btnRefreshOptions'));
+        if (dd) dd.hide();
+
+        try {
+            // Kick off background refresh
+            const url = buildRefreshUrl(options);
+            await apiFetch(url);
+
+            // Start polling (shared with resume)
+            const scopeLabel = options.repos ? options.repos.length + ' repos' : 'All repos';
+            await pollRefreshStatus(scopeLabel);
+
+        } catch (err) {
+            console.error('Refresh failed:', err);
+            showToast('Refresh failed: ' + err.message, 'danger');
+            onRefreshEnd();
+        }
+    }
+
+    /**
+     * Shared polling loop — used by refreshData() and resumeRefreshPolling().
+     * Updates the floating widget, the sync page (if visible), and the nav badge.
+     */
+    async function pollRefreshStatus(scopeLabel) {
+        const icon = document.getElementById('refreshIcon');
+        const widget = document.getElementById('refreshWidget');
+        const widgetScope = document.getElementById('widgetScope');
+        const widgetProgress = document.getElementById('widgetProgress');
+        const widgetDetail = document.getElementById('widgetDetail');
+        const widgetRateLimit = document.getElementById('widgetRateLimit');
+        const navBadge = document.getElementById('navSyncBadge');
+
+        state.refreshRunning = true;
+        icon.classList.add('spin-animation');
+        navBadge.style.display = 'inline';
+
+        // Show the bottom-right widget
+        widget.style.display = 'block';
+        widgetScope.textContent = scopeLabel || 'Syncing';
+        widgetProgress.textContent = 'Starting refresh...';
+        widgetDetail.textContent = '';
+        widgetRateLimit.textContent = '';
+
+        let complete = false;
+        let finalStatus = null;
+
+        while (!complete) {
+            await new Promise(r => setTimeout(r, 2000));
+            try {
+                const status = await apiFetch('/api/refresh/status');
+                const elapsed = status.elapsed_seconds ? Math.round(status.elapsed_seconds) + 's' : '';
+
+                widgetProgress.textContent = status.progress || 'Working...';
+
+                const detail = [];
+                if (status.current_repo) detail.push(status.current_repo);
+                if (status.repos_done != null && status.repos_total) detail.push(`Repos: ${status.repos_done}/${status.repos_total}`);
+                if (status.prs_fetched > 0) detail.push(`PRs: ${status.prs_fetched}`);
+                if (elapsed) detail.push(elapsed);
+                widgetDetail.textContent = detail.join(' \u2022 ');
+
+                // Rate limit display in widget
+                const rlHtml = buildRateLimitHtml(status.rate_limit);
+                widgetRateLimit.innerHTML = rlHtml;
+
+                // Also update the Sync page if it's visible
+                updateSyncPageLive(status);
+
+                if (!status.running) {
+                    complete = true;
+                    finalStatus = status;
+                    if (status.error) {
+                        throw new Error(status.error);
+                    }
+                }
+            } catch (pollErr) {
+                if (pollErr.message && !pollErr.message.includes('fetch')) throw pollErr;
+            }
+        }
+
+        // Refresh complete or cancelled
+        const wasCancelled = finalStatus?.progress === 'Cancelled.';
+        if (wasCancelled) {
+            showToast('Refresh was cancelled.', 'warning');
+        } else {
+            state.cachedSummary = null;
+            updateRefreshTime();
+            const reposDone = finalStatus?.repos_done || finalStatus?.repos_total || '?';
+            const prsFetched = finalStatus?.prs_fetched || 0;
+            showToast(`Refresh complete: ${reposDone} repos, ${prsFetched} PRs`, 'success');
+        }
+
+        onRefreshEnd();
+
+        // Reload the current view with fresh data
+        handleRoute();
+    }
+
+    /** Clean up UI state when refresh ends (complete, cancelled, or error) */
+    function onRefreshEnd() {
+        state.refreshRunning = false;
+        const icon = document.getElementById('refreshIcon');
+        icon.classList.remove('spin-animation');
+        document.getElementById('refreshWidget').style.display = 'none';
+        document.getElementById('navSyncBadge').style.display = 'none';
+        // Reset cancel button
+        const cancelBtn = document.getElementById('btnCancel');
+        cancelBtn.disabled = false;
+        cancelBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+    }
+
+    /** Build rate-limit HTML string from a status.rate_limit object */
+    function buildRateLimitHtml(rateLimit) {
+        if (!rateLimit || rateLimit.remaining == null) return '';
+        const rl = rateLimit;
+        const pct = rl.limit ? Math.round((rl.remaining / rl.limit) * 100) : 0;
+        let colorCls = 'rate-green';
+        if (pct < 20) colorCls = 'rate-red';
+        else if (pct <= 50) colorCls = 'rate-yellow';
+
+        if (rl.is_throttled) {
+            return `<span class="rate-red"><i class="bi bi-exclamation-triangle-fill me-1"></i>THROTTLED until ${rl.throttled_until || 'reset'}</span>`;
+        }
+
+        let html = `<span class="${colorCls}"><i class="bi bi-speedometer2 me-1"></i>${rl.remaining}/${rl.limit} (${pct}%)</span>`;
+        if (rl.resets_at) html += ` <span class="text-muted">| Reset: ${rl.resets_at}</span>`;
+        return html;
+    }
+
+    /**
+     * On page load, check if a refresh is already running on the server
+     * and resume the polling widget automatically.
+     */
+    async function checkAndResumeRefresh() {
+        try {
+            const status = await apiFetch('/api/refresh/status');
+            if (status.running) {
+                const scopeLabel = status.scope || 'In progress';
+                // Don't await — let it run in the background
+                pollRefreshStatus(scopeLabel);
+            }
+        } catch (e) {
+            // Silently ignore — server might not be ready yet
+            console.debug('Refresh status check on load:', e.message);
+        }
+    }
+
+    /** Called by "Refresh Selected" button in the dropdown */
+    function refreshSelected() {
+        const checked = document.querySelectorAll('#repoChecklist .form-check-input:checked');
+        const repos = Array.from(checked).map(cb => cb.value);
+        const opts = getDateRangeOptions();
+        if (repos.length > 0) opts.repos = repos;
+        refreshData(opts);
+    }
+
+    /** Toggle all repo checkboxes */
+    function toggleAllRepos(checked) {
+        document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => cb.checked = checked);
+    }
+
+    /** Clear date and repo filter inputs */
+    function clearRefreshFilters() {
+        document.getElementById('filterSince').value = '';
+        document.getElementById('filterUntil').value = '';
+        toggleAllRepos(false);
+    }
+
+    /** Populate the repo checklist from state.repoList */
+    function populateRepoChecklist() {
+        const container = document.getElementById('repoChecklist');
+        if (!state.repoList || state.repoList.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.8rem;">No repos found</div>';
+            return;
+        }
+        container.innerHTML = state.repoList.map(name => `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="${esc(name)}" id="repo_cb_${esc(name)}">
+                <label class="form-check-label" for="repo_cb_${esc(name)}">${esc(name)}</label>
+            </div>
+        `).join('');
+    }
+
+    /** Load repo list for the filter dropdown */
+    async function loadRepoList() {
+        try {
+            const data = await apiFetch('/api/repos');
+            // /api/repos may return an array of strings or objects with .name
+            if (Array.isArray(data)) {
+                state.repoList = data.map(r => (typeof r === 'string') ? r : (r.repo_name || r.name || ''));
+            } else if (data.repos) {
+                state.repoList = data.repos.map(r => (typeof r === 'string') ? r : (r.repo_name || r.name || ''));
+            }
+            state.repoList.sort((a, b) => a.localeCompare(b));
+            populateRepoChecklist();
+        } catch (e) {
+            console.warn('Could not load repo list for filter:', e);
+            // Fall back: try to get repos from cached summary
+            if (state.cachedSummary && state.cachedSummary.repo_summaries) {
+                state.repoList = state.cachedSummary.repo_summaries.map(r => r.repo_name || r.name).sort();
+                populateRepoChecklist();
+            }
+        }
+    }
+
+    function updateRefreshTime() {
+        const el = document.getElementById('refreshStatus');
+        const now = new Date();
+        el.innerHTML = `<i class="bi bi-check-circle text-success me-1"></i>Last refreshed: ${now.toLocaleTimeString()}`;
+    }
+
+    /** Simple toast notification */
+    function showToast(message, type = 'info') {
+        let container = document.getElementById('toastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'position-fixed bottom-0 end-0 p-3';
+            container.style.zIndex = '9999';
+            document.body.appendChild(container);
+        }
+        const id = 'toast-' + Date.now();
+        const html = `
+            <div id="${id}" class="toast align-items-center text-bg-${type} border-0" role="alert">
+                <div class="d-flex">
+                    <div class="toast-body">${esc(message)}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+        const toastEl = document.getElementById(id);
+        const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Overview Page
+    // ---------------------------------------------------------------------------
+    async function loadOverview() {
+        const container = document.getElementById('overviewContent');
+
+        try {
+            if (!state.cachedSummary) {
+                container.innerHTML = `
+                    <div class="section-loading">
+                        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                        <p class="mt-2">Loading overview data...</p>
+                    </div>`;
+                state.cachedSummary = await apiFetch('/api/summary');
+            }
+
+            const data = state.cachedSummary;
+            const overview = data.overview || {};
+            const allRepos = data.repo_summaries || [];
+            // Only show repos that have PR data
+            const repos = allRepos.filter(r => (r.total_prs || 0) > 0);
+
+            // If no repos have data, show an empty state
+            if (repos.length === 0) {
+                container.innerHTML = `
+                    <div class="section-card text-center py-5">
+                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3" style="color: #f0f6fc;">No PR Data Available</h5>
+                        <p class="text-muted">
+                            ${allRepos.length > 0
+                                ? allRepos.length + ' repos discovered, but none have PR data yet.'
+                                : 'No repositories found.'}
+                            Click <strong>Refresh Data</strong> to fetch pull requests.
+                        </p>
+                        <button class="btn btn-info btn-sm mt-2" onclick="refreshData()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh Data
+                        </button>
+                    </div>`;
+                return;
+            }
+
+            // Build summary cards
+            const totalRepos = repos.length;
+            const totalPRs = overview.total_prs || repos.reduce((s, r) => s + (r.total_prs || 0), 0);
+            const totalMerged = overview.total_merged || repos.reduce((s, r) => s + (r.merged || 0), 0);
+            const totalOpen = overview.total_open || repos.reduce((s, r) => s + (r.open || 0), 0);
+            const avgCycle = overview.avg_cycle_time || (repos.length ? round(repos.reduce((s, r) => s + (r.avg_cycle_time_hours || 0), 0) / repos.length) : 0);
+
+            let html = `
+                <!-- Summary Cards -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="stat-value text-info">${totalRepos}</div>
+                                    <div class="stat-label">Total Repos</div>
+                                </div>
+                                <i class="bi bi-folder stat-icon text-info"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="stat-value" style="color: var(--accent-blue)">${totalPRs}</div>
+                                    <div class="stat-label">Total PRs</div>
+                                </div>
+                                <i class="bi bi-code-square stat-icon" style="color: var(--accent-blue)"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="stat-value" style="color: var(--accent-purple)">${totalMerged}</div>
+                                    <div class="stat-label">Total Merged</div>
+                                </div>
+                                <i class="bi bi-git stat-icon" style="color: var(--accent-purple)"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="stat-value" style="color: var(--accent-green)">${totalOpen}</div>
+                                    <div class="stat-label">Total Open</div>
+                                </div>
+                                <i class="bi bi-record-circle stat-icon" style="color: var(--accent-green)"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="stat-value ${cycleClass(avgCycle)}">${fmtDuration(avgCycle)}</div>
+                                    <div class="stat-label">Avg Cycle Time</div>
+                                </div>
+                                <i class="bi bi-hourglass-split stat-icon" style="color: var(--accent-teal)"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart: Avg Cycle Time per Repo -->
+                <div class="section-card">
+                    <h5><i class="bi bi-bar-chart me-2"></i>Average Cycle Time by Repository</h5>
+                    <div class="chart-container" style="height: ${Math.max(300, repos.length * 40)}px;">
+                        <canvas id="chartCycleByRepo"></canvas>
+                    </div>
+                </div>
+
+                <!-- Repos Table -->
+                <div class="section-card">
+                    <h5><i class="bi bi-table me-2"></i>Repository Summary</h5>
+                    <div class="table-responsive">
+                        <table id="tableRepos" class="table table-dark-custom table-hover w-100">
+                            <thead>
+                                <tr>
+                                    <th>Repo Name</th>
+                                    <th>Total PRs</th>
+                                    <th>Open</th>
+                                    <th>Merged</th>
+                                    <th>Avg Cycle Time (hrs)</th>
+                                    <th>Median Cycle Time (hrs)</th>
+                                    <th>PRs with Bottlenecks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${repos.map(r => `
+                                    <tr onclick="navigate('#repo/${encodeURIComponent(r.repo_name || r.name)}')">
+                                        <td><span class="repo-name-link"><i class="bi bi-folder2 me-1"></i>${esc(r.repo_name || r.name)}</span></td>
+                                        <td>${r.total_prs || 0}</td>
+                                        <td><span class="text-success">${r.open || 0}</span></td>
+                                        <td><span style="color: var(--accent-purple)">${r.merged || 0}</span></td>
+                                        <td>
+                                            <span class="${cycleClass(r.avg_cycle_time_hours)}">${fmtDuration(r.avg_cycle_time_hours)}</span>
+                                            <small class="text-muted ms-1">(${round(r.avg_cycle_time_hours) || '--'}h)</small>
+                                        </td>
+                                        <td>
+                                            <span class="${cycleClass(r.median_cycle_time_hours)}">${fmtDuration(r.median_cycle_time_hours)}</span>
+                                            <small class="text-muted ms-1">(${round(r.median_cycle_time_hours) || '--'}h)</small>
+                                        </td>
+                                        <td>
+                                            ${(r.prs_with_bottlenecks || 0) > 0
+                                                ? `<span class="badge bg-warning text-dark">${r.prs_with_bottlenecks}</span>`
+                                                : '<span class="text-muted">0</span>'}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+
+            // Initialize DataTable
+            destroyTable('tableRepos');
+            state.dataTables['tableRepos'] = $('#tableRepos').DataTable({
+                pageLength: 25,
+                order: [[4, 'desc']],
+                language: { search: '', searchPlaceholder: 'Search repos...' },
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                     "<'row'<'col-sm-12'tr>>" +
+                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            });
+
+            // Build chart
+            const sorted = [...repos].sort((a, b) => (b.avg_cycle_time_hours || 0) - (a.avg_cycle_time_hours || 0));
+            destroyChart('chartCycleByRepo');
+            const ctx = document.getElementById('chartCycleByRepo').getContext('2d');
+            const defaults = chartDefaults();
+            state.charts['chartCycleByRepo'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(r => r.repo_name || r.name),
+                    datasets: [{
+                        label: 'Avg Cycle Time (hours)',
+                        data: sorted.map(r => round(r.avg_cycle_time_hours)),
+                        backgroundColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
+                        borderColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    ...defaults,
+                    indexAxis: 'y',
+                    plugins: {
+                        ...defaults.plugins,
+                        legend: { display: false },
+                        tooltip: {
+                            ...defaults.plugins.tooltip,
+                            callbacks: {
+                                label: ctx => `${fmtDuration(ctx.parsed.x)} (${ctx.parsed.x}h)`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ...defaults.scales.x,
+                            title: { display: true, text: 'Hours', color: '#8b949e' },
+                        },
+                        y: {
+                            ...defaults.scales.y,
+                            ticks: { ...defaults.scales.y.ticks, font: { size: 12 } },
+                        },
+                    },
+                },
+            });
+
+        } catch (err) {
+            console.error('Failed to load overview:', err);
+            container.innerHTML = `
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load overview</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadOverview()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Repo Detail Page
+    // ---------------------------------------------------------------------------
+    async function loadRepoDetail(repoName) {
+        state.currentRepo = repoName;
+        const container = document.getElementById('repoDetailContent');
+        container.innerHTML = `
+            <div class="section-loading">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <p class="mt-2">Loading ${esc(repoName)}...</p>
+            </div>`;
+
+        try {
+            const data = await apiFetch(`/api/repo/${encodeURIComponent(repoName)}`);
+            const summary = data.repo_summary || {};
+            const prs = data.prs || [];
+
+            const mergedPrs = prs.filter(p => (p.state || '').toLowerCase() === 'merged');
+
+            let html = `
+                <!-- Breadcrumb -->
+                <nav class="breadcrumb-custom" aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="#overview"><i class="bi bi-grid-1x2 me-1"></i>Overview</a></li>
+                        <li class="breadcrumb-item active">${esc(repoName)}</li>
+                    </ol>
+                </nav>
+
+                <!-- Summary Cards -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: var(--accent-blue)">${summary.total_prs || prs.length}</div>
+                            <div class="stat-label">Total PRs</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="stat-value text-success">${summary.open || prs.filter(p => (p.state||'').toLowerCase() === 'open').length}</div>
+                            <div class="stat-label">Open</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: var(--accent-purple)">${summary.merged || mergedPrs.length}</div>
+                            <div class="stat-label">Merged</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="stat-value ${cycleClass(summary.avg_cycle_time_hours)}">${fmtDuration(summary.avg_cycle_time_hours)}</div>
+                            <div class="stat-label">Avg Cycle Time</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="stat-card">
+                            <div class="stat-value ${cycleClass(summary.median_cycle_time_hours)}">${fmtDuration(summary.median_cycle_time_hours)}</div>
+                            <div class="stat-label">Median Cycle Time</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <!-- Top 10 Slowest PRs Chart -->
+                    <div class="col-lg-6">
+                        <div class="section-card">
+                            <h5><i class="bi bi-sort-down me-2"></i>Top 10 Slowest PRs</h5>
+                            <div class="chart-container" style="height: 400px;">
+                                <canvas id="chartSlowestPrs"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottleneck Distribution -->
+                    <div class="col-lg-6">
+                        <div class="section-card">
+                            <h5><i class="bi bi-pie-chart me-2"></i>Bottleneck Distribution</h5>
+                            <div class="chart-container" style="height: 400px;">
+                                <canvas id="chartBottleneckDist"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time Breakdown Chart -->
+                <div class="section-card">
+                    <h5><i class="bi bi-layers me-2"></i>Time Breakdown for Merged PRs</h5>
+                    <div class="chart-container" style="height: ${Math.max(300, Math.min(mergedPrs.length * 35, 600))}px;">
+                        <canvas id="chartTimeBreakdown"></canvas>
+                    </div>
+                </div>
+
+                <!-- PRs Table -->
+                <div class="section-card">
+                    <h5><i class="bi bi-list-ul me-2"></i>All Pull Requests</h5>
+                    <div class="table-responsive">
+                        <table id="tableRepoPrs" class="table table-dark-custom table-hover w-100">
+                            <thead>
+                                <tr>
+                                    <th>PR #</th>
+                                    <th>Title</th>
+                                    <th>Author</th>
+                                    <th>State</th>
+                                    <th>Created</th>
+                                    <th>Merged</th>
+                                    <th>Cycle Time</th>
+                                    <th>Time to Review</th>
+                                    <th>Bottlenecks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${prs.map(pr => {
+                                    const bottlenecks = pr.bottlenecks || pr.bottleneck_flags || [];
+                                    const bottleneckHtml = bottlenecks.map(b => severityBadge(b.severity || b.type || 'low')).join(' ');
+                                    return `
+                                    <tr onclick="navigate('#pr/${encodeURIComponent(repoName)}/${pr.number}')">
+                                        <td><span class="text-info fw-bold">#${pr.number}</span></td>
+                                        <td title="${esc(pr.title)}">${esc(truncate(pr.title, 50))}</td>
+                                        <td>${esc(pr.author || pr.user || '')}</td>
+                                        <td>${stateBadge(pr.state)}</td>
+                                        <td>${fmtDateShort(pr.created_at)}</td>
+                                        <td>${fmtDateShort(pr.merged_at)}</td>
+                                        <td data-order="${pr.cycle_time_hours || 0}">
+                                            <span class="${cycleClass(pr.cycle_time_hours)}">${fmtDuration(pr.cycle_time_hours)}</span>
+                                        </td>
+                                        <td data-order="${pr.time_to_first_review_hours || 0}">
+                                            ${fmtDuration(pr.time_to_first_review_hours)}
+                                        </td>
+                                        <td>${bottleneckHtml || '<span class="text-muted">--</span>'}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+
+            // DataTable
+            destroyTable('tableRepoPrs');
+            state.dataTables['tableRepoPrs'] = $('#tableRepoPrs').DataTable({
+                pageLength: 25,
+                order: [[0, 'desc']],
+                language: { search: '', searchPlaceholder: 'Search PRs...' },
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                     "<'row'<'col-sm-12'tr>>" +
+                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            });
+
+            // Chart: Top 10 slowest
+            const slowest = [...prs]
+                .filter(p => p.cycle_time_hours != null)
+                .sort((a, b) => (b.cycle_time_hours || 0) - (a.cycle_time_hours || 0))
+                .slice(0, 10);
+
+            destroyChart('chartSlowestPrs');
+            const ctxSlow = document.getElementById('chartSlowestPrs').getContext('2d');
+            const dflt = chartDefaults();
+            state.charts['chartSlowestPrs'] = new Chart(ctxSlow, {
+                type: 'bar',
+                data: {
+                    labels: slowest.map(p => `#${p.number}`),
+                    datasets: [{
+                        label: 'Cycle Time (hours)',
+                        data: slowest.map(p => round(p.cycle_time_hours)),
+                        backgroundColor: slowest.map(p => cycleColor(p.cycle_time_hours)),
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    ...dflt,
+                    indexAxis: 'y',
+                    plugins: {
+                        ...dflt.plugins,
+                        legend: { display: false },
+                        tooltip: {
+                            ...dflt.plugins.tooltip,
+                            callbacks: {
+                                title: items => {
+                                    const idx = items[0].dataIndex;
+                                    return `#${slowest[idx].number}: ${truncate(slowest[idx].title, 40)}`;
+                                },
+                                label: ctx => fmtDuration(ctx.parsed.x),
+                            },
+                        },
+                    },
+                    scales: {
+                        x: { ...dflt.scales.x, title: { display: true, text: 'Hours', color: '#8b949e' } },
+                        y: dflt.scales.y,
+                    },
+                    onClick: (e, elements) => {
+                        if (elements.length) {
+                            const idx = elements[0].index;
+                            navigate(`#pr/${encodeURIComponent(repoName)}/${slowest[idx].number}`);
+                        }
+                    },
+                },
+            });
+
+            // Chart: Time breakdown (stacked bar)
+            const breakdownPrs = mergedPrs
+                .filter(p => p.cycle_time_hours != null)
+                .sort((a, b) => (b.cycle_time_hours || 0) - (a.cycle_time_hours || 0))
+                .slice(0, 20);
+
+            destroyChart('chartTimeBreakdown');
+            const ctxBreak = document.getElementById('chartTimeBreakdown').getContext('2d');
+            state.charts['chartTimeBreakdown'] = new Chart(ctxBreak, {
+                type: 'bar',
+                data: {
+                    labels: breakdownPrs.map(p => `#${p.number}`),
+                    datasets: [
+                        {
+                            label: 'Time to First Review',
+                            data: breakdownPrs.map(p => round(p.time_to_first_review_hours || 0)),
+                            backgroundColor: '#58a6ff',
+                            borderRadius: 2,
+                        },
+                        {
+                            label: 'Review to Approval',
+                            data: breakdownPrs.map(p => round(p.review_to_approval_hours || 0)),
+                            backgroundColor: '#3fb9a8',
+                            borderRadius: 2,
+                        },
+                        {
+                            label: 'Approval to Merge',
+                            data: breakdownPrs.map(p => round(p.approval_to_merge_hours || 0)),
+                            backgroundColor: '#bc8cff',
+                            borderRadius: 2,
+                        },
+                    ],
+                },
+                options: {
+                    ...dflt,
+                    indexAxis: 'y',
+                    plugins: {
+                        ...dflt.plugins,
+                        tooltip: {
+                            ...dflt.plugins.tooltip,
+                            callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtDuration(ctx.parsed.x)}` },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ...dflt.scales.x,
+                            stacked: true,
+                            title: { display: true, text: 'Hours', color: '#8b949e' },
+                        },
+                        y: { ...dflt.scales.y, stacked: true },
+                    },
+                },
+            });
+
+            // Chart: Bottleneck distribution (pie)
+            const bnCounts = {};
+            prs.forEach(pr => {
+                (pr.bottlenecks || pr.bottleneck_flags || []).forEach(b => {
+                    const t = b.type || b.name || 'Unknown';
+                    bnCounts[t] = (bnCounts[t] || 0) + 1;
+                });
+            });
+
+            destroyChart('chartBottleneckDist');
+            const ctxPie = document.getElementById('chartBottleneckDist').getContext('2d');
+            const bnLabels = Object.keys(bnCounts);
+            const pieColors = ['#f85149', '#d29922', '#58a6ff', '#3fb9a8', '#bc8cff', '#3fb950', '#f0883e', '#a5d6ff'];
+
+            if (bnLabels.length > 0) {
+                state.charts['chartBottleneckDist'] = new Chart(ctxPie, {
+                    type: 'doughnut',
+                    data: {
+                        labels: bnLabels,
+                        datasets: [{
+                            data: bnLabels.map(l => bnCounts[l]),
+                            backgroundColor: bnLabels.map((_, i) => pieColors[i % pieColors.length]),
+                            borderColor: '#161b22',
+                            borderWidth: 2,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: { color: '#c9d1d9', padding: 16, font: { size: 12 } },
+                            },
+                            tooltip: dflt.plugins.tooltip,
+                        },
+                    },
+                });
+            } else {
+                document.getElementById('chartBottleneckDist').parentElement.innerHTML += `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                        <p class="mt-2">No bottlenecks detected</p>
+                    </div>`;
+            }
+
+        } catch (err) {
+            console.error('Failed to load repo detail:', err);
+            container.innerHTML = `
+                <nav class="breadcrumb-custom"><ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="#overview">Overview</a></li>
+                    <li class="breadcrumb-item active">${esc(repoName)}</li>
+                </ol></nav>
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load repository data</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadRepoDetail('${esc(repoName)}')">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // PR Detail Page
+    // ---------------------------------------------------------------------------
+    async function loadPrDetail(repoName, prNumber) {
+        state.currentRepo = repoName;
+        state.currentPr = prNumber;
+        const container = document.getElementById('prDetailContent');
+        container.innerHTML = `
+            <div class="section-loading">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <p class="mt-2">Loading PR #${prNumber}...</p>
+            </div>`;
+
+        try {
+            const pr = await apiFetch(`/api/pr/${encodeURIComponent(repoName)}/${prNumber}`);
+            const bottlenecks = pr.bottlenecks || pr.bottleneck_flags || [];
+            const reviewers = pr.reviewers || pr.reviews || [];
+            const ghUrl = `https://github.com/fusion-e/${encodeURIComponent(repoName)}/pull/${prNumber}`;
+
+            // Build timeline events
+            const events = [];
+            if (pr.created_at) events.push({ type: 'Created', time: pr.created_at, cls: 'dot-created', icon: 'bi-plus-circle' });
+            if (pr.first_review_at) events.push({ type: 'First Review', time: pr.first_review_at, cls: 'dot-reviewed', icon: 'bi-eye', detail: pr.first_reviewer ? `by ${pr.first_reviewer}` : '' });
+            if (pr.approved_at) events.push({ type: 'Approved', time: pr.approved_at, cls: 'dot-approved', icon: 'bi-check-circle' });
+            if (pr.merged_at) events.push({ type: 'Merged', time: pr.merged_at, cls: 'dot-merged', icon: 'bi-git' });
+            if (pr.closed_at && !pr.merged_at) events.push({ type: 'Closed', time: pr.closed_at, cls: 'dot-closed', icon: 'bi-x-circle' });
+            events.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+            // Calculate durations between events
+            const durations = [];
+            for (let i = 1; i < events.length; i++) {
+                const diffMs = new Date(events[i].time) - new Date(events[i - 1].time);
+                const diffHours = diffMs / (1000 * 60 * 60);
+                durations.push(diffHours);
+            }
+
+            let html = `
+                <!-- Breadcrumb -->
+                <nav class="breadcrumb-custom" aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="#overview"><i class="bi bi-grid-1x2 me-1"></i>Overview</a></li>
+                        <li class="breadcrumb-item"><a href="#repo/${encodeURIComponent(repoName)}">${esc(repoName)}</a></li>
+                        <li class="breadcrumb-item active">PR #${prNumber}</li>
+                    </ol>
+                </nav>
+
+                <div class="row g-4">
+                    <!-- PR Info Card -->
+                    <div class="col-lg-8">
+                        <div class="section-card">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h4 class="mb-1" style="color: #f0f6fc;">${esc(pr.title)}</h4>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        ${stateBadge(pr.state)}
+                                        <span class="text-muted">
+                                            <i class="bi bi-person me-1"></i>${esc(pr.author || pr.user || '')}
+                                        </span>
+                                        <span class="text-muted">
+                                            <i class="bi bi-calendar me-1"></i>${fmtDateShort(pr.created_at)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <a href="${ghUrl}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-github me-1"></i>View on GitHub
+                                </a>
+                            </div>
+
+                            <div class="pr-info-grid mt-3">
+                                <div class="pr-info-item">
+                                    <label>Base Branch</label>
+                                    <span><i class="bi bi-arrow-left me-1"></i>${esc(pr.base_branch || pr.base || '--')}</span>
+                                </div>
+                                <div class="pr-info-item">
+                                    <label>Head Branch</label>
+                                    <span><i class="bi bi-arrow-right me-1"></i>${esc(pr.head_branch || pr.head || '--')}</span>
+                                </div>
+                                <div class="pr-info-item">
+                                    <label>Additions</label>
+                                    <span class="additions">+${pr.additions != null ? pr.additions.toLocaleString() : '--'}</span>
+                                </div>
+                                <div class="pr-info-item">
+                                    <label>Deletions</label>
+                                    <span class="deletions">-${pr.deletions != null ? pr.deletions.toLocaleString() : '--'}</span>
+                                </div>
+                                <div class="pr-info-item">
+                                    <label>Files Changed</label>
+                                    <span>${pr.changed_files != null ? pr.changed_files : '--'}</span>
+                                </div>
+                                <div class="pr-info-item">
+                                    <label>Commits</label>
+                                    <span>${pr.commits != null ? pr.commits : '--'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Timeline -->
+                        <div class="section-card">
+                            <h5><i class="bi bi-clock-history me-2"></i>Timeline</h5>
+                            <div class="timeline">
+                                ${events.map((ev, i) => `
+                                    <div class="timeline-item">
+                                        <div class="timeline-dot ${ev.cls}"></div>
+                                        ${i < durations.length ? `<div class="timeline-duration">${fmtDuration(durations[i])}</div>` : ''}
+                                        <div class="timeline-content">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="event-type"><i class="bi ${ev.icon} me-1"></i>${ev.type}</span>
+                                                <span class="event-time">${fmtDate(ev.time)}</span>
+                                            </div>
+                                            ${ev.detail ? `<div class="event-detail">${esc(ev.detail)}</div>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                ${events.length === 0 ? '<p class="text-muted text-center py-3">No timeline events available</p>' : ''}
+                            </div>
+                        </div>
+
+                        <!-- Bottleneck Flags -->
+                        ${bottlenecks.length > 0 ? `
+                        <div class="section-card">
+                            <h5><i class="bi bi-exclamation-triangle me-2"></i>Bottleneck Flags</h5>
+                            ${bottlenecks.map(b => {
+                                const sev = (b.severity || 'low').toLowerCase();
+                                return `
+                                <div class="bottleneck-alert severity-${sev}">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong style="color: #f0f6fc;">${esc(b.type || b.name || 'Issue')}</strong>
+                                        ${severityBadge(b.severity || 'low')}
+                                    </div>
+                                    <p class="mb-0 text-muted" style="font-size: 0.9rem;">${esc(b.description || b.message || '')}</p>
+                                </div>`;
+                            }).join('')}
+                        </div>` : ''}
+                    </div>
+
+                    <!-- Right Sidebar -->
+                    <div class="col-lg-4">
+                        <!-- Metrics Card -->
+                        <div class="section-card">
+                            <h5><i class="bi bi-speedometer2 me-2"></i>Metrics</h5>
+                            <div class="list-group list-group-flush">
+                                ${buildMetricRow('Cycle Time', pr.cycle_time_hours, true)}
+                                ${buildMetricRow('Time to First Review', pr.time_to_first_review_hours)}
+                                ${buildMetricRow('Review to Approval', pr.review_to_approval_hours)}
+                                ${buildMetricRow('Approval to Merge', pr.approval_to_merge_hours)}
+                                ${buildMetricRow('Time to Merge', pr.time_to_merge_hours)}
+                                ${buildMetricRow('Review Duration', pr.review_duration_hours)}
+                            </div>
+                        </div>
+
+                        <!-- Reviewers -->
+                        <div class="section-card">
+                            <h5><i class="bi bi-people me-2"></i>Reviewers</h5>
+                            ${reviewers.length > 0 ? reviewers.map(r => {
+                                const name = r.user || r.login || r.reviewer || 'Unknown';
+                                const reviewState = r.state || '';
+                                const initial = name.charAt(0).toUpperCase();
+                                const stateIcon = reviewState.toLowerCase() === 'approved'
+                                    ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                                    : reviewState.toLowerCase() === 'changes_requested'
+                                        ? '<i class="bi bi-x-circle-fill text-danger"></i>'
+                                        : reviewState.toLowerCase() === 'commented'
+                                            ? '<i class="bi bi-chat-dots-fill text-info"></i>'
+                                            : '<i class="bi bi-hourglass text-muted"></i>';
+                                return `
+                                <div class="reviewer-item">
+                                    <div class="reviewer-avatar">${initial}</div>
+                                    <div class="flex-grow-1">
+                                        <div style="color: #f0f6fc; font-weight: 500;">${esc(name)}</div>
+                                        <small class="text-muted">${esc(reviewState)}</small>
+                                    </div>
+                                    ${stateIcon}
+                                </div>`;
+                            }).join('') : '<p class="text-muted text-center py-3">No reviewers</p>'}
+                        </div>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+
+        } catch (err) {
+            console.error('Failed to load PR detail:', err);
+            container.innerHTML = `
+                <nav class="breadcrumb-custom"><ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="#overview">Overview</a></li>
+                    <li class="breadcrumb-item"><a href="#repo/${encodeURIComponent(repoName)}">${esc(repoName)}</a></li>
+                    <li class="breadcrumb-item active">PR #${prNumber}</li>
+                </ol></nav>
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load PR data</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadPrDetail('${esc(repoName)}', '${prNumber}')">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    /** Helper: build a single metric row */
+    function buildMetricRow(label, value, highlight = false) {
+        const formatted = fmtDuration(value);
+        const numVal = round(value);
+        const cls = highlight ? cycleClass(value) : '';
+        return `
+            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid var(--card-border);">
+                <span class="text-muted" style="font-size: 0.875rem;">${label}</span>
+                <span class="${cls}" style="font-weight: 600;">
+                    ${formatted}
+                    ${numVal != null ? `<small class="text-muted ms-1">(${numVal}h)</small>` : ''}
+                </span>
+            </div>`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Bottlenecks Page
+    // ---------------------------------------------------------------------------
+    async function loadBottlenecks() {
+        const container = document.getElementById('bottlenecksContent');
+        container.innerHTML = `
+            <div class="section-loading">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <p class="mt-2">Loading bottleneck data...</p>
+            </div>`;
+
+        try {
+            // Get summary to populate filter dropdowns
+            if (!state.cachedSummary) {
+                state.cachedSummary = await apiFetch('/api/summary');
+            }
+            const allBnRepos = (state.cachedSummary.repo_summaries || []);
+            // Only show repos that have PR data in the filter dropdown
+            const repos = allBnRepos.filter(r => (r.total_prs || 0) > 0).map(r => r.repo_name || r.name);
+
+            const data = await apiFetch('/api/bottlenecks');
+            const bottlenecks = data.bottlenecks || data || [];
+
+            // Collect unique types and severities
+            const types = [...new Set(bottlenecks.map(b => b.type || b.bottleneck_type || '').filter(Boolean))];
+            const severities = [...new Set(bottlenecks.map(b => b.severity || '').filter(Boolean))];
+
+            // Summary stats
+            const totalFlags = bottlenecks.length;
+            const highCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
+            const medCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
+            const lowCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
+
+            let html = `
+                <h4 class="mb-4" style="color: #f0f6fc;">
+                    <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Bottleneck Analysis
+                </h4>
+
+                <!-- Summary Stats -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value text-info">${totalFlags}</div>
+                            <div class="stat-label">Total Flags</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: var(--accent-red);">${highCount}</div>
+                            <div class="stat-label">High Severity</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: var(--accent-yellow);">${medCount}</div>
+                            <div class="stat-label">Medium Severity</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: var(--accent-blue);">${lowCount}</div>
+                            <div class="stat-label">Low Severity</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="section-card">
+                    <div class="row g-3 filter-bar">
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Repository</label>
+                            <select class="form-select" id="filterRepo" onchange="applyBottleneckFilters()">
+                                <option value="">All Repositories</option>
+                                ${repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Bottleneck Type</label>
+                            <select class="form-select" id="filterType" onchange="applyBottleneckFilters()">
+                                <option value="">All Types</option>
+                                ${types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Severity</label>
+                            <select class="form-select" id="filterSeverity" onchange="applyBottleneckFilters()">
+                                <option value="">All Severities</option>
+                                ${severities.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottlenecks Table -->
+                <div class="section-card">
+                    <div class="table-responsive">
+                        <table id="tableBottlenecks" class="table table-dark-custom table-hover w-100">
+                            <thead>
+                                <tr>
+                                    <th>Repo</th>
+                                    <th>PR #</th>
+                                    <th>Title</th>
+                                    <th>Bottleneck Type</th>
+                                    <th>Severity</th>
+                                    <th>Description</th>
+                                    <th>Cycle Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${bottlenecks.map(b => `
+                                    <tr onclick="navigate('#pr/${encodeURIComponent(b.repo || b.repo_name || '')}/${b.pr_number || b.number || ''}')"
+                                        data-repo="${esc(b.repo || b.repo_name || '')}"
+                                        data-type="${esc(b.type || b.bottleneck_type || '')}"
+                                        data-severity="${esc((b.severity || '').toLowerCase())}">
+                                        <td><span class="repo-name-link">${esc(b.repo || b.repo_name || '')}</span></td>
+                                        <td><span class="text-info fw-bold">#${b.pr_number || b.number || ''}</span></td>
+                                        <td title="${esc(b.pr_title || b.title || '')}">${esc(truncate(b.pr_title || b.title || '', 40))}</td>
+                                        <td><span class="badge bg-secondary">${esc(b.type || b.bottleneck_type || '')}</span></td>
+                                        <td>${severityBadge(b.severity)}</td>
+                                        <td title="${esc(b.description || b.message || '')}">${esc(truncate(b.description || b.message || '', 50))}</td>
+                                        <td data-order="${b.cycle_time_hours || 0}">
+                                            <span class="${cycleClass(b.cycle_time_hours)}">${fmtDuration(b.cycle_time_hours)}</span>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+
+            // DataTable
+            destroyTable('tableBottlenecks');
+            state.dataTables['tableBottlenecks'] = $('#tableBottlenecks').DataTable({
+                pageLength: 25,
+                order: [[4, 'asc'], [6, 'desc']],
+                language: { search: '', searchPlaceholder: 'Search bottlenecks...' },
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                     "<'row'<'col-sm-12'tr>>" +
+                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            });
+
+        } catch (err) {
+            console.error('Failed to load bottlenecks:', err);
+            container.innerHTML = `
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load bottleneck data</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadBottlenecks()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    /** Apply dropdown filters to the bottlenecks table */
+    function applyBottleneckFilters() {
+        const repo = document.getElementById('filterRepo').value.toLowerCase();
+        const type = document.getElementById('filterType').value.toLowerCase();
+        const severity = document.getElementById('filterSeverity').value.toLowerCase();
+
+        const dt = state.dataTables['tableBottlenecks'];
+        if (!dt) return;
+
+        // Use DataTables search on individual columns
+        // Column 0 = Repo, Column 3 = Type, Column 4 = Severity
+        dt.column(0).search(repo ? '^' + $.fn.dataTable.util.escapeRegex(document.getElementById('filterRepo').value) + '$' : '', true, false);
+        dt.column(3).search(type ? $.fn.dataTable.util.escapeRegex(document.getElementById('filterType').value) : '', true, false);
+        dt.column(4).search(severity ? $.fn.dataTable.util.escapeRegex(document.getElementById('filterSeverity').value) : '', true, false);
+        dt.draw();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Sync Status Page
+    // ---------------------------------------------------------------------------
+
+    /** Format seconds into human-readable elapsed time */
+    function fmtElapsed(secs) {
+        if (!secs || secs < 0) return '--';
+        secs = Math.round(secs);
+        if (secs < 60) return `${secs}s`;
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        if (m < 60) return `${m}m ${s}s`;
+        const h = Math.floor(m / 60);
+        return `${h}h ${m % 60}m`;
+    }
+
+    /** Load the Sync status page */
+    async function loadSyncView() {
+        const container = document.getElementById('syncContent');
+
+        try {
+            const status = await apiFetch('/api/refresh/status');
+            renderSyncPage(container, status);
+        } catch (err) {
+            container.innerHTML = `
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load sync status</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadSyncView()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    /** Render the full Sync page given a status object */
+    function renderSyncPage(container, status) {
+        const isRunning = status.running;
+        const rl = status.rate_limit || {};
+        const rlPct = rl.limit ? Math.round((rl.remaining / rl.limit) * 100) : null;
+
+        // Progress bar
+        let progressPct = 0;
+        let progressLabel = 'Idle';
+        if (isRunning && status.repos_total > 0) {
+            progressPct = Math.round(((status.repos_done || 0) / status.repos_total) * 100);
+            progressLabel = `${status.repos_done || 0} / ${status.repos_total} repos`;
+        } else if (!isRunning && status.repos_done > 0) {
+            progressPct = 100;
+            progressLabel = status.progress || 'Complete';
+        }
+
+        // Rate-limit bar color
+        let rlBarCls = 'bg-success';
+        if (rlPct !== null && rlPct < 20) rlBarCls = 'bg-danger';
+        else if (rlPct !== null && rlPct <= 50) rlBarCls = 'bg-warning';
+
+        // Status badge
+        let statusBadge = '';
+        if (isRunning) {
+            statusBadge = '<span class="badge bg-success"><i class="bi bi-broadcast me-1"></i>Running</span>';
+        } else if (status.progress === 'Cancelled.') {
+            statusBadge = '<span class="badge bg-warning text-dark"><i class="bi bi-x-circle me-1"></i>Cancelled</span>';
+        } else if (status.error) {
+            statusBadge = `<span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error</span>`;
+        } else if (status.repos_done > 0) {
+            statusBadge = '<span class="badge bg-info"><i class="bi bi-check-circle me-1"></i>Complete</span>';
+        } else {
+            statusBadge = '<span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Idle</span>';
+        }
+
+        // Scope info
+        const scopeText = status.scope || 'All repos';
+
+        // Started at
+        let startedAtText = '--';
+        if (status.started_at) {
+            const d = new Date(status.started_at * 1000);
+            startedAtText = d.toLocaleString();
+        }
+
+        container.innerHTML = `
+            <h4 class="mb-4" style="color: #f0f6fc;">
+                <i class="bi bi-arrow-repeat me-2 text-info"></i>Sync Status
+            </h4>
+
+            <!-- Status & Actions Row -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="mb-1">${statusBadge}</div>
+                                <div class="stat-label">Status</div>
+                            </div>
+                            <i class="bi bi-activity stat-icon text-info"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value text-info">${status.repos_done || 0}<small class="text-muted">/${status.repos_total || 0}</small></div>
+                                <div class="stat-label">Repos Processed</div>
+                            </div>
+                            <i class="bi bi-folder stat-icon text-info"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" style="color: var(--accent-purple)">${status.prs_fetched || 0}</div>
+                                <div class="stat-label">PRs Fetched</div>
+                            </div>
+                            <i class="bi bi-code-square stat-icon" style="color: var(--accent-purple)"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" style="color: var(--accent-teal)">${fmtElapsed(status.elapsed_seconds)}</div>
+                                <div class="stat-label">Elapsed Time</div>
+                            </div>
+                            <i class="bi bi-stopwatch stat-icon" style="color: var(--accent-teal)"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Details section -->
+            <div class="row g-3 mb-4">
+                <!-- Progress -->
+                <div class="col-lg-8">
+                    <div class="section-card">
+                        <h5><i class="bi bi-list-check me-2"></i>Progress</h5>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-muted small" id="syncProgressLabel">${esc(status.progress || 'No refresh in progress')}</span>
+                                <span class="small" id="syncProgressPct">${progressPct}%</span>
+                            </div>
+                            <div class="progress" style="height: 8px; background: #21262d;">
+                                <div class="progress-bar ${isRunning ? 'progress-bar-striped progress-bar-animated' : ''} bg-info"
+                                     id="syncProgressBar" role="progressbar" style="width: ${progressPct}%"></div>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                                    <span class="text-muted small">Current Repo</span>
+                                    <span id="syncCurrentRepo" style="color: #f0f6fc; font-weight: 500;">${esc(status.current_repo || '--')}</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                                    <span class="text-muted small">Started At</span>
+                                    <span style="color: #f0f6fc;">${startedAtText}</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2">
+                                    <span class="text-muted small">Scope</span>
+                                    <span style="color: #f0f6fc; font-size: 0.85rem; text-align: right; max-width: 250px; word-break: break-word;">${esc(scopeText)}</span>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                                    <span class="text-muted small">Repos Done</span>
+                                    <span id="syncReposDone" style="color: #f0f6fc; font-weight: 500;">${status.repos_done || 0} / ${status.repos_total || 0}</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                                    <span class="text-muted small">PRs Fetched</span>
+                                    <span id="syncPrsFetched" style="color: var(--accent-purple); font-weight: 500;">${status.prs_fetched || 0}</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2">
+                                    <span class="text-muted small">Elapsed</span>
+                                    <span id="syncElapsed" style="color: var(--accent-teal); font-weight: 500;">${fmtElapsed(status.elapsed_seconds)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${status.error ? `
+                        <div class="alert alert-danger mt-3 mb-0" style="background: rgba(248,81,73,0.1); border-color: var(--accent-red); color: var(--accent-red);">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Error:</strong> ${esc(status.error)}
+                        </div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Rate Limit & Actions -->
+                <div class="col-lg-4">
+                    <div class="section-card">
+                        <h5><i class="bi bi-speedometer2 me-2"></i>API Rate Limit</h5>
+                        ${rlPct !== null ? `
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted small">Remaining</span>
+                                <span id="syncRlRemaining" class="small" style="color: #f0f6fc;">${rl.remaining} / ${rl.limit}</span>
+                            </div>
+                            <div class="progress" style="height: 8px; background: #21262d;">
+                                <div class="progress-bar ${rlBarCls}" id="syncRlBar" role="progressbar" style="width: ${rlPct}%"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                            <span class="text-muted small">Used</span>
+                            <span style="color: #f0f6fc;">${rl.used || 0}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-2" style="border-bottom: 1px solid var(--card-border);">
+                            <span class="text-muted small">Resets At</span>
+                            <span id="syncRlReset" style="color: #f0f6fc;">${rl.resets_at || '--'}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span class="text-muted small">Throttled</span>
+                            <span>${rl.is_throttled
+                                ? '<span class="badge bg-danger">Yes</span>'
+                                : '<span class="badge bg-secondary">No</span>'}</span>
+                        </div>
+                        ` : `
+                        <p class="text-muted text-center py-3">No rate limit data available.<br>Start a refresh to see API usage.</p>
+                        `}
+                    </div>
+
+                    <!-- Actions card -->
+                    <div class="section-card">
+                        <h5><i class="bi bi-lightning me-2"></i>Actions</h5>
+                        <div class="d-grid gap-2">
+                            ${isRunning ? `
+                            <button class="btn btn-outline-danger" onclick="cancelRefresh(); setTimeout(loadSyncView, 2000);">
+                                <i class="bi bi-x-circle me-1"></i>Cancel Refresh
+                            </button>
+                            ` : `
+                            <button class="btn btn-info" onclick="refreshData()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh All Repos
+                            </button>
+                            `}
+                            <button class="btn btn-outline-secondary btn-sm" onclick="loadSyncView()">
+                                <i class="bi bi-arrow-repeat me-1"></i>Reload Status
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    /** Live-update the Sync page (if visible) with a status object from polling */
+    function updateSyncPageLive(status) {
+        // Only update if the sync view is currently active
+        const syncView = document.getElementById('viewSync');
+        if (!syncView || !syncView.classList.contains('active')) return;
+
+        // Update individual elements instead of re-rendering the whole page
+        const progressLabel = document.getElementById('syncProgressLabel');
+        const progressBar = document.getElementById('syncProgressBar');
+        const progressPct = document.getElementById('syncProgressPct');
+        const currentRepo = document.getElementById('syncCurrentRepo');
+        const reposDone = document.getElementById('syncReposDone');
+        const prsFetched = document.getElementById('syncPrsFetched');
+        const elapsed = document.getElementById('syncElapsed');
+        const rlRemaining = document.getElementById('syncRlRemaining');
+        const rlBar = document.getElementById('syncRlBar');
+        const rlReset = document.getElementById('syncRlReset');
+
+        if (progressLabel) progressLabel.textContent = status.progress || 'Working...';
+        if (currentRepo) currentRepo.textContent = status.current_repo || '--';
+        if (reposDone) reposDone.textContent = `${status.repos_done || 0} / ${status.repos_total || 0}`;
+        if (prsFetched) prsFetched.textContent = status.prs_fetched || 0;
+        if (elapsed) elapsed.textContent = fmtElapsed(status.elapsed_seconds);
+
+        if (status.repos_total > 0) {
+            const pct = Math.round(((status.repos_done || 0) / status.repos_total) * 100);
+            if (progressBar) progressBar.style.width = pct + '%';
+            if (progressPct) progressPct.textContent = pct + '%';
+        }
+
+        const rl = status.rate_limit || {};
+        if (rl.remaining != null && rl.limit) {
+            const pct = Math.round((rl.remaining / rl.limit) * 100);
+            if (rlRemaining) rlRemaining.textContent = `${rl.remaining} / ${rl.limit}`;
+            if (rlBar) {
+                rlBar.style.width = pct + '%';
+                rlBar.className = 'progress-bar ' + (pct < 20 ? 'bg-danger' : pct <= 50 ? 'bg-warning' : 'bg-success');
+            }
+            if (rlReset) rlReset.textContent = rl.resets_at || '--';
+        }
+
+        // If refresh just finished, re-render the full page to update buttons/badges
+        if (!status.running) {
+            setTimeout(() => loadSyncView(), 500);
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Initialization
+    // ---------------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set Chart.js global defaults for dark theme
+        Chart.defaults.color = '#c9d1d9';
+        Chart.defaults.borderColor = 'rgba(48, 54, 61, 0.5)';
+        Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
+        // Load repo list for filter dropdown (non-blocking)
+        loadRepoList();
+
+        // Check if a refresh is already running (e.g., from a previous session)
+        checkAndResumeRefresh();
+
+        // Handle initial route
+        handleRoute();
+    });
+    });
+    </script>
+</body>
+</html>

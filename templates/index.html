@@ -1238,8 +1238,8 @@
     /** Load repo list for the filter dropdown */
     async function loadRepoList() {
         try {
-            const data = await apiFetch('/api/repos');
-            // /api/repos may return an array of strings or objects with .name
+            const data = await apiFetch('/api/repos?all=true');
+            // /api/repos?all=true returns every discovered repo for the checklist
             if (Array.isArray(data)) {
                 state.repoList = data.map(r => (typeof r === 'string') ? r : (r.repo_name || r.name || ''));
             } else if (data.repos) {

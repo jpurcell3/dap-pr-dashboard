@@ -168,9 +168,23 @@ def api_config():
 # 2. List repos ---------------------------------------------------------------
 @app.route("/api/repos")
 def api_repos():
-    """Return a JSON list of fusion-* repository names."""
+    """Return a JSON list of fusion-* repository names.
+
+    By default only repos that have PR data in the current data store are
+    returned.  Pass ``?all=true`` to include every discovered repo (useful
+    for the refresh repo-picker).
+    """
     try:
+        show_all = request.args.get("all", "").lower() in ("true", "1", "yes")
         repos = get_fusion_repos()
+
+        if not show_all and _data_store["loaded"]:
+            repos_with_data = {
+                name for name, prs in _data_store.get("raw_prs", {}).items()
+                if prs
+            }
+            repos = [r for r in repos if r in repos_with_data]
+
         return jsonify(repos)
     except Exception as exc:
         logger.exception("Error fetching repo list")
@@ -396,7 +410,10 @@ def api_summary():
             400,
         )
 
-    repo_summaries = _data_store["repo_summaries"]
+    repo_summaries = [
+        s for s in _data_store["repo_summaries"]
+        if s.get("total_prs") and s["total_prs"] > 0
+    ]
     overview = _build_overview(repo_summaries)
 
     return jsonify({"repo_summaries": repo_summaries, "overview": overview})

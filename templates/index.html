@@ -670,6 +670,10 @@
                                 <!-- Repo selection -->
                                 <label class="form-label mb-1">Repositories</label>
                                 <div class="mb-2">
+                                    <input type="text" class="form-control form-control-sm mb-2" id="repoSearch"
+                                           placeholder="Search repos..." autocomplete="off"
+                                           oninput="filterRepoChecklist(this.value)"
+                                           style="background:#0d1117;border-color:var(--card-border);color:#f0f6fc;">
                                     <div class="d-flex gap-2 mb-1">
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(true)">Select All</button>
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(false)">Clear All</button>
@@ -1208,15 +1212,31 @@
         refreshData(opts);
     }
 
-    /** Toggle all repo checkboxes */
+    /** Toggle all repo checkboxes (only visible/filtered ones) */
     function toggleAllRepos(checked) {
-        document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => cb.checked = checked);
+        document.querySelectorAll('#repoChecklist .form-check').forEach(row => {
+            if (row.style.display !== 'none') {
+                row.querySelector('.form-check-input').checked = checked;
+            }
+        });
+    }
+
+    /** Filter the repo checklist by search text */
+    function filterRepoChecklist(query) {
+        const q = query.toLowerCase().trim();
+        document.querySelectorAll('#repoChecklist .form-check').forEach(row => {
+            const label = row.querySelector('.form-check-label');
+            const name = label ? label.textContent.toLowerCase() : '';
+            row.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
     }
 
     /** Clear date and repo filter inputs */
     function clearRefreshFilters() {
         document.getElementById('filterSince').value = '';
         document.getElementById('filterUntil').value = '';
+        document.getElementById('repoSearch').value = '';
+        filterRepoChecklist('');
         toggleAllRepos(false);
     }
 

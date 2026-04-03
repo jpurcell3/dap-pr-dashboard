@@ -72,8 +72,8 @@
         .stat-card {
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
-            border-radius: 8px;
-            padding: 1.25rem;
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
             transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
@@ -83,21 +83,21 @@
         }
 
         .stat-card .stat-value {
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
             line-height: 1.2;
         }
 
         .stat-card .stat-label {
-            font-size: 0.8rem;
+            font-size: 0.72rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: #8b949e;
-            margin-top: 0.25rem;
+            margin-top: 0.15rem;
         }
 
         .stat-card .stat-icon {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             opacity: 0.7;
         }
 
@@ -105,15 +105,16 @@
         .section-card {
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         .section-card h5 {
             color: #f0f6fc;
             font-weight: 600;
-            margin-bottom: 1rem;
+            font-size: 0.95rem;
+            margin-bottom: 0.6rem;
         }
 
         /* Tables */
@@ -123,17 +124,24 @@
             --bs-table-border-color: var(--card-border);
             --bs-table-hover-bg: var(--hover-bg);
             --bs-table-hover-color: #f0f6fc;
+            font-size: 0.85rem;
         }
 
         .table-dark-custom thead th {
             background-color: rgba(22, 27, 34, 0.8);
             color: #8b949e;
             font-weight: 600;
-            font-size: 0.8rem;
+            font-size: 0.73rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             border-bottom: 2px solid var(--card-border);
             white-space: nowrap;
+            padding: 0.4rem 0.5rem;
+        }
+
+        .table-dark-custom tbody td {
+            padding: 0.35rem 0.5rem;
+            vertical-align: middle;
         }
 
         .table-dark-custom tbody tr {
@@ -230,7 +238,7 @@
         .breadcrumb-custom {
             background: transparent;
             padding: 0;
-            margin-bottom: 1.5rem;
+            margin-bottom: 0.75rem;
         }
 
         .breadcrumb-custom .breadcrumb-item a {
@@ -273,7 +281,7 @@
         .timeline-item {
             position: relative;
             padding-left: 56px;
-            padding-bottom: 1.5rem;
+            padding-bottom: 1rem;
         }
 
         .timeline-item:last-child {
@@ -284,8 +292,8 @@
             position: absolute;
             left: 16px;
             top: 4px;
-            width: 18px;
-            height: 18px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background-color: var(--accent-blue);
             border: 2px solid var(--card-bg);
@@ -312,24 +320,24 @@
             background-color: rgba(22, 27, 34, 0.5);
             border: 1px solid var(--card-border);
             border-radius: 6px;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
         }
 
         .timeline-content .event-type {
             font-weight: 600;
             color: #f0f6fc;
-            font-size: 0.9rem;
+            font-size: 0.82rem;
         }
 
         .timeline-content .event-time {
             color: #8b949e;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
 
         .timeline-content .event-detail {
             color: #8b949e;
-            font-size: 0.85rem;
-            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            margin-top: 0.15rem;
         }
 
         /* View transitions */
@@ -393,10 +401,10 @@
 
         /* Bottleneck alert cards */
         .bottleneck-alert {
-            border-radius: 8px;
-            padding: 1rem 1.25rem;
-            margin-bottom: 0.75rem;
-            border-left: 4px solid;
+            border-radius: 6px;
+            padding: 0.6rem 0.9rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid;
         }
 
         .bottleneck-alert.severity-high {
@@ -428,7 +436,7 @@
         .reviewer-item {
             display: flex;
             align-items: center;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
             border-bottom: 1px solid var(--card-border);
         }
 
@@ -437,17 +445,17 @@
         }
 
         .reviewer-avatar {
-            width: 32px;
-            height: 32px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             background-color: var(--accent-blue);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: #fff;
-            margin-right: 0.75rem;
+            margin-right: 0.5rem;
             flex-shrink: 0;
         }
 
@@ -473,19 +481,19 @@
 
         /* Main content area */
         .main-content {
-            padding: 1.5rem 0;
+            padding: 0.75rem 0;
             min-height: calc(100vh - 60px);
         }
 
         /* PR info grid */
         .pr-info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.6rem;
         }
 
         .pr-info-item label {
-            font-size: 0.75rem;
+            font-size: 0.68rem;
             color: #8b949e;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -528,6 +536,26 @@
         .refresh-status-widget .rate-green { color: var(--accent-green); }
         .refresh-status-widget .rate-yellow { color: var(--accent-yellow); }
         .refresh-status-widget .rate-red { color: var(--accent-red); }
+
+        /* Checks & commits section */
+        .check-item { display: flex; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid rgba(48,54,61,0.4); font-size: 0.85rem; }
+        .check-item:last-child { border-bottom: none; }
+        .check-icon { width: 20px; text-align: center; margin-right: 0.5rem; flex-shrink: 0; }
+        .check-name { flex: 1; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .check-badge { font-size: 0.7rem; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .check-badge.success { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .check-badge.failure { background: rgba(248,81,73,0.15); color: #f85149; }
+        .check-badge.pending { background: rgba(210,153,34,0.15); color: #d29922; }
+        .check-failure-detail { font-size: 0.8rem; color: #8b949e; padding: 0.25rem 0 0 1.75rem; }
+        .commit-list-item { display: flex; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid rgba(48,54,61,0.3); font-size: 0.82rem; }
+        .commit-list-item:last-child { border-bottom: none; }
+        .commit-sha { font-family: monospace; color: var(--accent-blue); font-size: 0.78rem; margin-right: 0.5rem; flex-shrink: 0; }
+        .commit-msg { flex: 1; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .commit-author { color: #8b949e; font-size: 0.78rem; margin-left: 0.5rem; flex-shrink: 0; }
+        .checks-summary-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 0.5rem; }
+        .checks-summary-bar .bar-success { background: var(--accent-green); }
+        .checks-summary-bar .bar-failure { background: var(--accent-red); }
+        .checks-summary-bar .bar-pending { background: var(--accent-yellow); }
 
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin-animation { animation: spin 1s linear infinite; display: inline-block; }
@@ -1394,7 +1422,7 @@
 
             let html = `
                 <!-- Summary Cards -->
-                <div class="row g-3 mb-4">
+                <div class="row g-2 mb-3">
                     <div class="col-6 col-md-4 col-xl">
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
@@ -1455,7 +1483,7 @@
                 <!-- Chart: Avg Cycle Time per Repo -->
                 <div class="section-card">
                     <h5><i class="bi bi-bar-chart me-2"></i>Average Cycle Time by Repository</h5>
-                    <div class="chart-container" style="height: ${Math.max(300, repos.length * 40)}px;">
+                    <div class="chart-container" style="height: ${Math.max(200, Math.min(repos.length * 32, 350))}px;">
                         <canvas id="chartCycleByRepo"></canvas>
                     </div>
                 </div>
@@ -1619,7 +1647,7 @@
                 </nav>
 
                 <!-- Summary Cards -->
-                <div class="row g-3 mb-4">
+                <div class="row g-2 mb-3">
                     <div class="col-6 col-md-4 col-xl">
                         <div class="stat-card">
                             <div class="stat-value" style="color: var(--accent-blue)">${summary.total_prs || prs.length}</div>
@@ -1652,12 +1680,12 @@
                     </div>
                 </div>
 
-                <div class="row g-4 mb-4">
+                <div class="row g-3 mb-3">
                     <!-- Top 10 Slowest PRs Chart -->
                     <div class="col-lg-6">
                         <div class="section-card">
                             <h5><i class="bi bi-sort-down me-2"></i>Top 10 Slowest PRs</h5>
-                            <div class="chart-container" style="height: 400px;">
+                            <div class="chart-container" style="height: 280px;">
                                 <canvas id="chartSlowestPrs"></canvas>
                             </div>
                         </div>
@@ -1667,7 +1695,7 @@
                     <div class="col-lg-6">
                         <div class="section-card">
                             <h5><i class="bi bi-pie-chart me-2"></i>Bottleneck Distribution</h5>
-                            <div class="chart-container" style="height: 400px;">
+                            <div class="chart-container" style="height: 280px;">
                                 <canvas id="chartBottleneckDist"></canvas>
                             </div>
                         </div>
@@ -1677,7 +1705,7 @@
                 <!-- Time Breakdown Chart -->
                 <div class="section-card">
                     <h5><i class="bi bi-layers me-2"></i>Time Breakdown for Merged PRs</h5>
-                    <div class="chart-container" style="height: ${Math.max(300, Math.min(mergedPrs.length * 35, 600))}px;">
+                    <div class="chart-container" style="height: ${Math.max(200, Math.min(mergedPrs.length * 28, 400))}px;">
                         <canvas id="chartTimeBreakdown"></canvas>
                     </div>
                 </div>
@@ -1696,7 +1724,8 @@
                                     <th>Created</th>
                                     <th>Merged</th>
                                     <th>Cycle Time</th>
-                                    <th>Time to Review</th>
+                                    <th>Commits</th>
+                                    <th>Checks</th>
                                     <th>Bottlenecks</th>
                                 </tr>
                             </thead>
@@ -1704,6 +1733,11 @@
                                 ${prs.map(pr => {
                                     const bottlenecks = pr.bottlenecks || pr.bottleneck_flags || [];
                                     const bottleneckHtml = bottlenecks.map(b => severityBadge(b.severity || b.type || 'low')).join(' ');
+                                    const chk = pr.checks || {};
+                                    const chkState = chk.overall_state || 'unknown';
+                                    const chkClass = chkState === 'success' ? 'text-success' : chkState === 'failure' ? 'text-danger' : 'text-warning';
+                                    const chkIcon = chkState === 'success' ? 'bi-check-circle-fill' : chkState === 'failure' ? 'bi-x-circle-fill' : chkState === 'unknown' ? '' : 'bi-clock';
+                                    const chkLabel = chk.total ? `${chk.success || 0}/${chk.total}` : '--';
                                     return `
                                     <tr onclick="navigate('#pr/${encodeURIComponent(repoName)}/${pr.number}')">
                                         <td><span class="text-info fw-bold">#${pr.number}</span></td>
@@ -1715,9 +1749,8 @@
                                         <td data-order="${pr.total_cycle_time_hours || 0}">
                                             <span class="${cycleClass(pr.total_cycle_time_hours)}">${fmtDuration(pr.total_cycle_time_hours)}</span>
                                         </td>
-                                        <td data-order="${pr.time_to_first_review_hours || 0}">
-                                            ${fmtDuration(pr.time_to_first_review_hours)}
-                                        </td>
+                                        <td>${pr.total_commits || (Array.isArray(pr.commits) ? pr.commits.length : (pr.commits || '--'))}</td>
+                                        <td>${chkIcon ? `<i class="bi ${chkIcon} ${chkClass} me-1"></i>` : ''}${chkLabel}</td>
                                         <td>${bottleneckHtml || '<span class="text-muted">--</span>'}</td>
                                     </tr>`;
                                 }).join('')}
@@ -1953,7 +1986,7 @@
                     </ol>
                 </nav>
 
-                <div class="row g-4">
+                <div class="row g-3">
                     <!-- PR Info Card -->
                     <div class="col-lg-8">
                         <div class="section-card">
@@ -1998,7 +2031,7 @@
                                 </div>
                                 <div class="pr-info-item">
                                     <label>Commits</label>
-                                    <span>${pr.commits != null ? pr.commits : '--'}</span>
+                                    <span>${pr.total_commits || (Array.isArray(pr.commits) ? pr.commits.length : (pr.commits || '--'))}</span>
                                 </div>
                             </div>
                         </div>
@@ -2023,6 +2056,75 @@
                                 ${events.length === 0 ? '<p class="text-muted text-center py-3">No timeline events available</p>' : ''}
                             </div>
                         </div>
+
+                        <!-- Checks (CI/CD) -->
+                        ${(() => {
+                            const chk = pr.checks || {};
+                            const runs = chk.checks || [];
+                            const total = chk.total || 0;
+                            if (total === 0) return '';
+                            const pct = (n) => total > 0 ? (n / total * 100).toFixed(1) : 0;
+                            const failedRuns = runs.filter(c => ['failure','cancelled','timed_out','action_required'].includes(c.conclusion));
+                            const checkIcon = (conclusion) => {
+                                if (['success','neutral','skipped'].includes(conclusion))
+                                    return '<i class="bi bi-check-circle-fill text-success"></i>';
+                                if (['failure','cancelled','timed_out','action_required'].includes(conclusion))
+                                    return '<i class="bi bi-x-circle-fill text-danger"></i>';
+                                return '<i class="bi bi-clock text-warning"></i>';
+                            };
+                            const checkClass = (conclusion) => {
+                                if (['success','neutral','skipped'].includes(conclusion)) return 'success';
+                                if (['failure','cancelled','timed_out','action_required'].includes(conclusion)) return 'failure';
+                                return 'pending';
+                            };
+                            return `
+                        <div class="section-card">
+                            <h5><i class="bi bi-shield-check me-2"></i>Checks
+                                <span class="check-badge ${chk.overall_state === 'success' ? 'success' : chk.overall_state === 'failure' ? 'failure' : 'pending'} ms-2">
+                                    ${chk.overall_state || 'unknown'}
+                                </span>
+                                <small class="text-muted ms-2" style="font-weight:400; font-size:0.8rem;">${chk.success || 0}/${total} passed</small>
+                            </h5>
+                            <div class="checks-summary-bar">
+                                ${chk.success ? `<div class="bar-success" style="width:${pct(chk.success)}%"></div>` : ''}
+                                ${chk.failure ? `<div class="bar-failure" style="width:${pct(chk.failure)}%"></div>` : ''}
+                                ${chk.pending ? `<div class="bar-pending" style="width:${pct(chk.pending)}%"></div>` : ''}
+                            </div>
+                            ${runs.map(c => `
+                                <div class="check-item">
+                                    <span class="check-icon">${checkIcon(c.conclusion)}</span>
+                                    <span class="check-name" title="${esc(c.name)}">${esc(c.name)}</span>
+                                    <span class="check-badge ${checkClass(c.conclusion)}">${esc(c.conclusion)}</span>
+                                    ${c.details_url ? `<a href="${esc(c.details_url)}" target="_blank" class="ms-2 text-muted" style="font-size:0.78rem;"><i class="bi bi-box-arrow-up-right"></i></a>` : ''}
+                                </div>
+                                ${c.conclusion === 'failure' && (c.output_title || c.output_summary) ? `
+                                    <div class="check-failure-detail">
+                                        ${c.output_title ? `<strong>${esc(c.output_title)}</strong>` : ''}
+                                        ${c.output_summary ? `<span class="ms-1">${esc(truncate(c.output_summary, 150))}</span>` : ''}
+                                    </div>` : ''}
+                            `).join('')}
+                        </div>`;
+                        })()}
+
+                        <!-- Commits -->
+                        ${(() => {
+                            const commits = Array.isArray(pr.commits) ? pr.commits : [];
+                            if (commits.length === 0) return '';
+                            const shown = commits.slice(0, 15);
+                            const remaining = commits.length - shown.length;
+                            return `
+                        <div class="section-card">
+                            <h5><i class="bi bi-git me-2"></i>Commits <small class="text-muted" style="font-weight:400; font-size:0.8rem;">(${commits.length})</small></h5>
+                            ${shown.map(c => `
+                                <div class="commit-list-item">
+                                    <span class="commit-sha" title="${esc(c.sha)}">${esc((c.sha || '').slice(0, 7))}</span>
+                                    <span class="commit-msg" title="${esc(c.message)}">${esc(truncate(c.message, 70))}</span>
+                                    <span class="commit-author">${esc(c.author_login || c.author_name || '')}</span>
+                                </div>
+                            `).join('')}
+                            ${remaining > 0 ? `<div class="text-muted text-center py-1" style="font-size:0.8rem;">+ ${remaining} more commits</div>` : ''}
+                        </div>`;
+                        })()}
 
                         <!-- Bottleneck Flags -->
                         ${bottlenecks.length > 0 ? `
@@ -2112,8 +2214,8 @@
         const numVal = round(value);
         const cls = highlight ? cycleClass(value) : '';
         return `
-            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid var(--card-border);">
-                <span class="text-muted" style="font-size: 0.875rem;">${label}</span>
+            <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom: 1px solid var(--card-border); font-size: 0.82rem;">
+                <span class="text-muted">${label}</span>
                 <span class="${cls}" style="font-weight: 600;">
                     ${formatted}
                     ${numVal != null ? `<small class="text-muted ms-1">(${numVal}h)</small>` : ''}
@@ -2160,7 +2262,7 @@
                 </h4>
 
                 <!-- Summary Stats -->
-                <div class="row g-3 mb-4">
+                <div class="row g-2 mb-3">
                     <div class="col-6 col-md-3">
                         <div class="stat-card">
                             <div class="stat-value text-info">${totalFlags}</div>
@@ -2383,7 +2485,7 @@
             </h4>
 
             <!-- Status & Actions Row -->
-            <div class="row g-3 mb-4">
+            <div class="row g-2 mb-3">
                 <div class="col-6 col-md-3">
                     <div class="stat-card">
                         <div class="d-flex justify-content-between align-items-start">
@@ -2431,7 +2533,7 @@
             </div>
 
             <!-- Details section -->
-            <div class="row g-3 mb-4">
+            <div class="row g-2 mb-3">
                 <!-- Progress -->
                 <div class="col-lg-8">
                     <div class="section-card">

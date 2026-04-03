@@ -490,6 +490,145 @@ def fetch_pr_comments(
 
 
 # ---------------------------------------------------------------------------
+# Commit & check-run helpers
+# ---------------------------------------------------------------------------
+
+def fetch_pr_commits(
+    repo_name: str,
+    pr_number: int,
+    token: str | None = None,
+) -> list[dict]:
+    """Fetch all commits for a pull request.
+
+    Returns a list of commit dicts, each containing:
+    ``sha``, ``message``, ``author_name``, ``author_login``, ``date``.
+    """
+    headers = _build_headers(token)
+    url = f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}/pulls/{pr_number}/commits"
+
+    try:
+        raw = _get_paginated(url, headers)
+    except requests.HTTPError as exc:
+        logger.error(
+            "Failed to fetch commits for %s#%d: %s", repo_name, pr_number, exc
+        )
+        return []
+
+    commits: list[dict] = []
+    for c in raw:
+        commits.append({
+            "sha": c.get("sha", ""),
+            "message": (c.get("commit", {}).get("message") or "").split("\n", 1)[0],
+            "author_name": c.get("commit", {}).get("author", {}).get("name", ""),
+            "author_login": (c.get("author") or {}).get("login", ""),
+            "date": c.get("commit", {}).get("author", {}).get("date", ""),
+        })
+    return commits
+
+
+def fetch_commit_checks(
+    repo_name: str,
+    sha: str,
+    token: str | None = None,
+) -> dict:
+    """Fetch check-runs and combined status for a single commit.
+
+    Returns a summary dict with ``total``, ``success``, ``failure``,
+    ``pending``, ``checks`` (list of individual results), and
+    ``overall_state``.
+    """
+    headers = _build_headers(token)
+    checks: list[dict] = []
+
+    # --- GitHub Apps check-runs -----------------------------------------------
+    try:
+        url = (
+            f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
+            f"/commits/{sha}/check-runs"
+        )
+        headers_cr = {**headers, "Accept": "application/vnd.github.v3+json"}
+        resp = requests.get(
+            url, headers=headers_cr, verify=SSL_VERIFY, timeout=30
+        )
+        _check_rate_limit(resp)
+        resp.raise_for_status()
+        data = resp.json()
+        for cr in data.get("check_runs", []):
+            conclusion = (cr.get("conclusion") or "pending").lower()
+            checks.append({
+                "name": cr.get("name", ""),
+                "status": cr.get("status", ""),
+                "conclusion": conclusion,
+                "details_url": cr.get("details_url") or cr.get("html_url", ""),
+                "output_title": (cr.get("output") or {}).get("title", ""),
+                "output_summary": _strip_html(
+                    (cr.get("output") or {}).get("summary", "")
+                )[:300],
+            })
+    except Exception:
+        logger.debug(
+            "Failed to fetch check-runs for %s@%s", repo_name, sha[:8],
+            exc_info=True,
+        )
+
+    # --- Classic commit statuses ----------------------------------------------
+    try:
+        url = (
+            f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
+            f"/commits/{sha}/status"
+        )
+        resp = requests.get(url, headers=headers, verify=SSL_VERIFY, timeout=30)
+        _check_rate_limit(resp)
+        resp.raise_for_status()
+        status_data = resp.json()
+        for s in status_data.get("statuses", []):
+            checks.append({
+                "name": s.get("context", ""),
+                "status": "completed",
+                "conclusion": s.get("state", "pending"),
+                "details_url": s.get("target_url", ""),
+                "output_title": s.get("description", ""),
+                "output_summary": "",
+            })
+    except Exception:
+        logger.debug(
+            "Failed to fetch commit status for %s@%s", repo_name, sha[:8],
+            exc_info=True,
+        )
+
+    # --- Build summary --------------------------------------------------------
+    total = len(checks)
+    success = sum(1 for c in checks if c["conclusion"] in ("success", "neutral", "skipped"))
+    failure = sum(1 for c in checks if c["conclusion"] in ("failure", "cancelled", "timed_out", "action_required"))
+    pending = total - success - failure
+
+    # Overall state: failure if any failed, pending if any pending, else success
+    if failure > 0:
+        overall = "failure"
+    elif pending > 0:
+        overall = "pending"
+    elif total > 0:
+        overall = "success"
+    else:
+        overall = "unknown"
+
+    return {
+        "total": total,
+        "success": success,
+        "failure": failure,
+        "pending": pending,
+        "overall_state": overall,
+        "checks": checks,
+    }
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags from a string (best-effort)."""
+    import re
+    return re.sub(r"<[^>]+>", "", text).strip()
+
+
+# ---------------------------------------------------------------------------
 # Aggregate fetch
 # ---------------------------------------------------------------------------
 
@@ -585,6 +724,30 @@ def fetch_all_data(
                 )
                 pr["review_comments"] = []
                 pr["issue_comments"] = []
+
+            try:
+                pr["commits"] = fetch_pr_commits(repo_name, pr_number, token=token)
+                # Fetch checks for the HEAD (last) commit
+                if pr["commits"]:
+                    head_sha = pr["commits"][-1]["sha"]
+                    pr["checks"] = fetch_commit_checks(
+                        repo_name, head_sha, token=token
+                    )
+                else:
+                    pr["checks"] = {"total": 0, "success": 0, "failure": 0,
+                                    "pending": 0, "overall_state": "unknown",
+                                    "checks": []}
+            except Exception:
+                logger.error(
+                    "Unexpected error fetching commits/checks for %s#%d",
+                    repo_name,
+                    pr_number,
+                    exc_info=True,
+                )
+                pr["commits"] = []
+                pr["checks"] = {"total": 0, "success": 0, "failure": 0,
+                                "pending": 0, "overall_state": "unknown",
+                                "checks": []}
 
             enriched_prs.append(pr)
 

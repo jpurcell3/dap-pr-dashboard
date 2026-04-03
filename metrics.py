@@ -164,6 +164,13 @@ def compute_pr_metrics(pr_data: dict[str, Any]) -> dict[str, Any]:
         "num_comments": num_comments,
         "num_reviewers": num_reviewers,
         "reviewers": reviewer_logins,
+        # Commit & check data (passed through from collector)
+        "total_commits": len(pr_data["commits"]) if isinstance(pr_data.get("commits"), list) else (pr_data.get("commits") or 0),
+        "commits": pr_data["commits"] if isinstance(pr_data.get("commits"), list) else [],
+        "checks": pr_data.get("checks") if isinstance(pr_data.get("checks"), dict) else {
+            "total": 0, "success": 0, "failure": 0,
+            "pending": 0, "overall_state": "unknown", "checks": [],
+        },
     }
 
     # Detect and attach bottlenecks

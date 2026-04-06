@@ -555,15 +555,24 @@ def fetch_commit_checks(
         data = resp.json()
         for cr in data.get("check_runs", []):
             conclusion = (cr.get("conclusion") or "pending").lower()
+            check_name = cr.get("name", "")
+            raw_summary = (cr.get("output") or {}).get("summary", "")
+            raw_title = (cr.get("output") or {}).get("title", "")
+            if check_name.lower() == "twistlock":
+                summary_text = _extract_twistlock_summary(raw_summary)
+                # Title duplicates the check name; drop it so the UI
+                # doesn't show "twistlock" twice.
+                output_title = ""
+            else:
+                summary_text = _strip_html(raw_summary)[:300]
+                output_title = raw_title
             checks.append({
-                "name": cr.get("name", ""),
+                "name": check_name,
                 "status": cr.get("status", ""),
                 "conclusion": conclusion,
                 "details_url": cr.get("details_url") or cr.get("html_url", ""),
-                "output_title": (cr.get("output") or {}).get("title", ""),
-                "output_summary": _strip_html(
-                    (cr.get("output") or {}).get("summary", "")
-                )[:300],
+                "output_title": output_title,
+                "output_summary": summary_text,
             })
     except Exception:
         logger.debug(
@@ -626,6 +635,32 @@ def _strip_html(text: str) -> str:
     """Remove HTML tags from a string (best-effort)."""
     import re
     return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def _extract_twistlock_summary(raw_summary: str) -> str:
+    """Extract Scan Summary Result and Recommended Action from a Twistlock
+    check output summary, discarding the boilerplate description, FAQ, and
+    help sections.  Returns a compact plain-text string.
+
+    If the expected markers are not found the raw text is returned
+    (HTML-stripped and truncated) as a fallback.
+    """
+    import re
+    scan_match = re.search(
+        r"\*{3}Scan Summary Result:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+    )
+    action_match = re.search(
+        r"\*{3}Recommended Action:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+    )
+    if scan_match or action_match:
+        parts = []
+        if scan_match:
+            parts.append(f"Scan Summary: {scan_match.group(1).strip()}")
+        if action_match:
+            parts.append(f"Recommended Action: {action_match.group(1).strip()}")
+        return " | ".join(parts)
+    # Fallback: strip HTML and return a reasonable chunk
+    return _strip_html(raw_summary)[:500]
 
 
 # ---------------------------------------------------------------------------

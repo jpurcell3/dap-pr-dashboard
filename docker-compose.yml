@@ -1,0 +1,27 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "5001:5000"                  # 5001 locally so it doesn't clash with local dev on 5000
+    env_file: .env
+    environment:
+      - CACHE_PATH=/data/pr_cache.json
+      - LOG_TO_STDOUT=true
+    volumes:
+      - .:/app                       # bind mount: local edits sync instantly
+      - cache_data:/data             # persistent cache (separate from local pr_cache.json)
+    develop:
+      watch:
+        - action: sync               # file changes → live sync (covered by bind mount too)
+          path: .
+          target: /app
+          ignore:
+            - .git/
+            - __pycache__/
+            - pr_cache.json
+            - server.log
+        - action: rebuild            # dependency changes → full rebuild
+          path: requirements.txt
+
+volumes:
+  cache_data:

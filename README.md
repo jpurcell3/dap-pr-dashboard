@@ -66,6 +66,43 @@ All configuration is via environment variables (or `.env` file):
 | `GITHUB_WEB_URL` | *(auto-derived)* | Override the web URL for PR links |
 | `DEFAULT_PR_LOOKBACK_DAYS` | `90` | Default date window for refreshes |
 | `MAX_PRS_PER_REPO` | `500` | Safety cap on PRs fetched per repo |
+| `CACHE_PATH` | `pr_cache.json` (next to app.py) | Override the cache file location |
+| `LOG_TO_STDOUT` | *(unset)* | Set `true` to skip writing `server.log` |
+
+## Running with Docker
+
+### Quick start (container only)
+
+```bash
+cp .env.example .env   # edit with your values
+docker compose up --build
+```
+
+Open http://localhost:5001 in your browser.
+
+### Development workflow (local + container side by side)
+
+```bash
+# Terminal 1: local dev server
+python app.py                     # http://localhost:5000
+
+# Terminal 2: container mirror
+docker compose up --build         # http://localhost:5001
+```
+
+The `docker-compose.yml` bind-mounts your project directory into the container, and gunicorn runs with `--reload`. Any file you save locally is picked up by both the local dev server and the container automatically.
+
+If you change `requirements.txt`, rebuild the container:
+
+```bash
+docker compose up --build
+```
+
+Or use Compose watch mode (Docker Compose 2.22+) to handle rebuilds automatically:
+
+```bash
+docker compose watch
+```
 
 ## API Endpoints
 
@@ -91,5 +128,8 @@ fusion-pr-dashboard/
   templates/index.html   # Single-page dashboard UI
   requirements.txt       # Python dependencies
   .env.example           # Configuration template
+  Dockerfile             # Container image definition
+  docker-compose.yml     # Dev container with bind mount and watch support
+  .dockerignore
   .gitignore
 ```

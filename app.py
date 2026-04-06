@@ -49,13 +49,13 @@ GITHUB_WEB_URL = _derive_github_web_url(GITHUB_API_BASE)
 # Logging
 # ---------------------------------------------------------------------------
 LOG_FILE = os.path.join(os.path.dirname(__file__), "server.log")
+_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+if os.environ.get("LOG_TO_STDOUT", "").lower() not in ("1", "true", "yes"):
+    _log_handlers.append(logging.FileHandler(LOG_FILE, encoding="utf-8"))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-    ],
+    handlers=_log_handlers,
 )
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
 
-CACHE_PATH = r"C:\Users\jpurcell\fusion-pr-dashboard\pr_cache.json"
+CACHE_PATH = os.environ.get(
+    "CACHE_PATH",
+    os.path.join(os.path.dirname(__file__), "pr_cache.json"),
+)
 
 # In-memory store populated from cache or a /api/refresh call.
 _data_store: dict = {

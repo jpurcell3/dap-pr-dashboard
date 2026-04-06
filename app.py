@@ -312,23 +312,42 @@ def _do_refresh(repos=None, since=None, until=None):
         logger.info("Refresh: fetched %d total PRs, computing metrics...", total_prs)
 
         if is_partial:
-            # --- Partial refresh: merge new data into existing store --------
-            # Update only the refreshed repos in raw_prs
-            merged_raw = dict(data_store_get("raw_prs", {}))
-            for repo_name in raw_prs:
-                merged_raw[repo_name] = raw_prs[repo_name]
+            # --- Partial refresh: incremental metric update ----------------
+            # Only recompute metrics for the repos that were actually
+            # refreshed, then merge into the existing store.  This avoids
+            # re-running compute_all_metrics over every repo.
+            changed_repos = set(raw_prs.keys())
 
-            # Recompute ALL metrics from the full merged raw_prs dict
-            all_metrics = compute_all_metrics(merged_raw)
-            repo_summaries = all_metrics.get("repo_summaries", [])
-            pr_metrics = all_metrics.get("pr_metrics", {})
-            bottlenecks = all_metrics.get("bottlenecks", [])
+            # Compute metrics only for changed repos
+            changed_metrics = compute_all_metrics(raw_prs)
+
+            # Merge raw_prs
+            merged_raw = dict(data_store_get("raw_prs", {}))
+            merged_raw.update(raw_prs)
+
+            # Merge pr_metrics: replace changed repos, keep the rest
+            merged_pr_metrics = dict(data_store_get("pr_metrics", {}))
+            merged_pr_metrics.update(changed_metrics.get("pr_metrics", {}))
+
+            # Merge repo_summaries: drop old entries for changed repos, add new
+            repo_summaries = [
+                s for s in data_store_get("repo_summaries", [])
+                if s.get("repo") not in changed_repos
+            ]
+            repo_summaries.extend(changed_metrics.get("repo_summaries", []))
+
+            # Merge bottlenecks: drop old entries for changed repos, add new
+            bottlenecks = [
+                b for b in data_store_get("bottlenecks", [])
+                if b.get("repo") not in changed_repos
+            ]
+            bottlenecks.extend(changed_metrics.get("bottlenecks", []))
 
             refresh_status_set("progress", "Saving cache...")
             cache_payload = {
                 "raw_prs": merged_raw,
                 "repo_summaries": repo_summaries,
-                "pr_metrics": pr_metrics,
+                "pr_metrics": merged_pr_metrics,
                 "bottlenecks": bottlenecks,
             }
             save_cache(cache_payload, CACHE_PATH)

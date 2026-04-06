@@ -99,8 +99,21 @@ def add_cors_headers(response):
 # Helpers
 # ---------------------------------------------------------------------------
 def _load_cache_into_store() -> bool:
-    """Try to load the JSON cache file into the shared state store.
-    Returns True on success, False otherwise."""
+    """Load cached data into the shared state store.
+
+    Priority order:
+      1. Redis — if connected and already populated, use it (no file I/O).
+      2. File  — load ``pr_cache.json`` and push into Redis + in-memory.
+
+    Returns True if data was loaded from any source, False otherwise.
+    """
+    # 1. If Redis already has data (e.g. from a previous container lifetime
+    #    or another worker), skip the file entirely.
+    if is_redis_active() and data_store_loaded():
+        logger.info("Cache already present in Redis — skipping file load.")
+        return True
+
+    # 2. Fall back to the JSON file cache.
     if not os.path.exists(CACHE_PATH):
         logger.info("No cache file found at %s", CACHE_PATH)
         return False
@@ -117,7 +130,7 @@ def _load_cache_into_store() -> bool:
             "bottlenecks": cached.get("bottlenecks", []),
             "loaded": True,
         })
-        logger.info("Cache loaded successfully from %s", CACHE_PATH)
+        logger.info("Cache loaded from file %s (written to Redis too).", CACHE_PATH)
         return True
     except Exception:
         logger.exception("Failed to load cache from %s", CACHE_PATH)
@@ -701,7 +714,8 @@ def api_health():
     # --- Data cache ---
     loaded = data_store_loaded()
     cache_exists = os.path.exists(CACHE_PATH)
-    cache_info: dict = {"loaded_in_memory": loaded, "file_exists": cache_exists}
+    cache_source = "redis" if (redis_active and loaded) else ("file" if loaded else "none")
+    cache_info: dict = {"loaded": loaded, "source": cache_source, "file_exists": cache_exists}
     if cache_exists:
         try:
             stat = os.stat(CACHE_PATH)

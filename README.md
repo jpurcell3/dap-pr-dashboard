@@ -10,7 +10,7 @@ A Flask web app that aggregates pull request data from GitHub / GitHub Enterpris
 - **Bottleneck detection** (slow review, slow approval, stale PRs, large PRs, excessive review rounds)
 - **Repo picker** with search across all org repos
 - **Date filtering** and configurable lookback window
-- **Persistent cache** so data survives server restarts
+- **Persistent cache** so data survives server restarts (Redis-first with file fallback)
 
 ## Quick Start
 

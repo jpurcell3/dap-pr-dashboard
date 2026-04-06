@@ -27,6 +27,7 @@ from redis_state import (
     refresh_status_get, refresh_status_set, refresh_status_bulk_set,
     refresh_status_snapshot, refresh_status_reset,
     rate_limit_get, rate_limit_snapshot,
+    acquire_refresh_lock, release_refresh_lock,
 )
 
 # ---------------------------------------------------------------------------
@@ -369,6 +370,8 @@ def _do_refresh(repos=None, since=None, until=None):
             "running": False,
             "progress": f"Error: {exc}",
         })
+    finally:
+        release_refresh_lock()
 
 
 @app.route("/api/refresh")
@@ -388,7 +391,7 @@ def api_refresh():
         ISO date (``YYYY-MM-DD``).  Exclude PRs created after this date
         (applied after fetch, before metric computation).
     """
-    if refresh_status_get("running"):
+    if refresh_status_get("running") or not acquire_refresh_lock():
         return jsonify({"status": "already_running", **refresh_status_snapshot()})
 
     repo_param = request.args.get("repo")

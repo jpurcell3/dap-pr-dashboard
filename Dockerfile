@@ -17,6 +17,6 @@ EXPOSE 5000
 ENV CACHE_PATH=/data/pr_cache.json
 ENV LOG_TO_STDOUT=true
 
-# Single worker + threads: keeps in-memory state consistent within one process.
-# --reload watches for file changes (useful with bind mounts in dev).
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--timeout", "300", "--reload", "app:app"]
+# Workers auto-scale: 4 with Redis, 1 without.  Override via WEB_CONCURRENCY.
+# gunicorn.conf.py handles all tunables (workers, threads, reload, timeout).
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

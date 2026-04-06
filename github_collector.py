@@ -813,11 +813,15 @@ def save_cache(
     data: dict[str, list[dict]],
     filepath: str | Path = DEFAULT_CACHE_PATH,
 ) -> None:
-    """Persist *data* as JSON to *filepath*."""
+    """Persist *data* as JSON to *filepath* (atomic write)."""
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, "w", encoding="utf-8") as fh:
+    # Write to a temp file first, then rename for crash safety.
+    tmp = filepath.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, default=str)
+    # os.replace is atomic on POSIX; on Windows it's as close as we get.
+    os.replace(tmp, filepath)
     logger.info("Cache saved to %s (%d bytes).", filepath, filepath.stat().st_size)
 
 

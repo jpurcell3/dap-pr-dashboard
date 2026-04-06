@@ -329,3 +329,56 @@ def rate_limit_bulk_set(mapping: dict) -> None:
             pipe.execute()
         except Exception:
             logger.debug("Redis bulk-write failed for rate_limit", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Distributed lock  (refresh coordination across workers)
+# ---------------------------------------------------------------------------
+import threading as _threading
+
+_local_lock = _threading.Lock()       # fallback when Redis is unavailable
+_KEY_REFRESH_LOCK = "dap:refresh_lock"
+_LOCK_TTL_SECONDS = 600               # auto-expire if holder crashes
+
+
+def acquire_refresh_lock(timeout: float = 0) -> bool:
+    """Try to acquire the refresh lock.
+
+    With Redis this uses ``SET NX EX`` so exactly one worker wins across
+    all processes.  Without Redis it falls back to a threading lock
+    (single-process only).
+
+    Parameters
+    ----------
+    timeout : float
+        Seconds to wait for the lock (0 = non-blocking).
+
+    Returns True if the lock was acquired, False otherwise.
+    """
+    r = _get_redis()
+    if r is not None:
+        try:
+            acquired = r.set(
+                _KEY_REFRESH_LOCK, "1", nx=True, ex=_LOCK_TTL_SECONDS,
+            )
+            return bool(acquired)
+        except Exception:
+            logger.debug("Redis lock acquire failed", exc_info=True)
+    # Fallback: threading lock
+    return _local_lock.acquire(blocking=(timeout > 0), timeout=timeout or -1)
+
+
+def release_refresh_lock() -> None:
+    """Release the refresh lock."""
+    r = _get_redis()
+    if r is not None:
+        try:
+            r.delete(_KEY_REFRESH_LOCK)
+            return
+        except Exception:
+            logger.debug("Redis lock release failed", exc_info=True)
+    # Fallback
+    try:
+        _local_lock.release()
+    except RuntimeError:
+        pass  # wasn't held

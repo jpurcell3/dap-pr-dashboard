@@ -69,6 +69,7 @@ All configuration is via environment variables (or `.env` file):
 | `CACHE_PATH` | `pr_cache.json` (next to app.py) | Override the cache file location |
 | `LOG_TO_STDOUT` | *(unset)* | Set `true` to skip writing `server.log` |
 | `REDIS_URL` | *(unset)* | Redis connection URL for shared state (e.g. `redis://localhost:6379/0`). When unset, in-memory dicts are used. |
+| `WEB_CONCURRENCY` | `4` (with Redis) / `1` (without) | Number of gunicorn worker processes. Auto-scales based on Redis availability. |
 
 ## Running with Docker
 
@@ -129,6 +130,7 @@ fusion-pr-dashboard/
   github_collector.py    # GitHub API client (PRs, reviews, commits, checks)
   metrics.py             # Cycle-time metrics and bottleneck detection
   redis_state.py         # Redis-backed shared state (falls back to in-memory)
+  gunicorn.conf.py       # Gunicorn settings (workers, threads, reload)
   templates/index.html   # Single-page dashboard UI
   requirements.txt       # Python dependencies
   .env.example           # Configuration template

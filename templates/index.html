@@ -1756,6 +1756,12 @@
                 <!-- PRs Table -->
                 <div class="section-card">
                     <h5><i class="bi bi-list-ul me-2"></i>All Pull Requests</h5>
+                    <div class="d-flex gap-2 mb-2" id="prStateFilters">
+                        <button class="btn btn-sm btn-outline-light active" data-state="all">All</button>
+                        <button class="btn btn-sm btn-outline-success" data-state="open"><i class="bi bi-record-circle me-1"></i>Open</button>
+                        <button class="btn btn-sm btn-outline-info" data-state="merged"><i class="bi bi-git me-1"></i>Merged</button>
+                        <button class="btn btn-sm btn-outline-secondary" data-state="closed"><i class="bi bi-x-circle me-1"></i>Closed</button>
+                    </div>
                     <div class="table-responsive">
                         <table id="tableRepoPrs" class="table table-dark-custom table-hover w-100">
                             <thead>
@@ -1813,6 +1819,17 @@
                 dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
                      "<'row'<'col-sm-12'tr>>" +
                      "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            });
+
+            // State filter buttons
+            document.querySelectorAll('#prStateFilters button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#prStateFilters button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const st = btn.dataset.state;
+                    const dt = state.dataTables['tableRepoPrs'];
+                    if (dt) dt.column(3).search(st === 'all' ? '' : st, true, false).draw();
+                });
             });
 
             // Chart: Top 10 slowest

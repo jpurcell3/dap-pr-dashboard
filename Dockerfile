@@ -17,6 +17,9 @@ EXPOSE 5000
 ENV CACHE_PATH=/data/pr_cache.json
 ENV LOG_TO_STDOUT=true
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
+
 # Workers auto-scale: 4 with Redis, 1 without.  Override via WEB_CONCURRENCY.
 # gunicorn.conf.py handles all tunables (workers, threads, reload, timeout).
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

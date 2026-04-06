@@ -113,6 +113,7 @@ docker compose watch
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/config` | Current configuration (non-sensitive) |
+| GET | `/api/health` | Service health (Redis, cache, refresh, rate limit) |
 | GET | `/api/repos` | Repos with PR data (add `?all=true` for all org repos) |
 | GET | `/api/summary` | Repo summaries and overview stats |
 | GET | `/api/repo/<name>` | Detailed PR metrics for a repo |

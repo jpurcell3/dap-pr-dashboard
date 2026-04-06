@@ -13,7 +13,7 @@ services:
       - cache_data:/data             # persistent cache (separate from local pr_cache.json)
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
     develop:
       watch:
         - action: sync               # file changes → live sync (covered by bind mount too)
@@ -34,6 +34,11 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --dir /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
 volumes:
   cache_data:

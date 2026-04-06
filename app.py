@@ -28,6 +28,7 @@ from redis_state import (
     refresh_status_snapshot, refresh_status_reset,
     rate_limit_get, rate_limit_snapshot,
     acquire_refresh_lock, release_refresh_lock,
+    is_redis_active,
 )
 
 # ---------------------------------------------------------------------------
@@ -647,6 +648,83 @@ def api_bottlenecks():
     )
 
     return jsonify(bottlenecks)
+
+
+# 8. Health check --------------------------------------------------------------
+@app.route("/api/health")
+def api_health():
+    """Return service health for monitoring and container orchestration.
+
+    Returns 200 when the service is healthy, 503 when degraded.
+    The response always includes diagnostic details regardless of status.
+    """
+    checks: dict = {}
+    healthy = True
+
+    # --- Redis ---
+    redis_active = is_redis_active()
+    redis_url = os.environ.get("REDIS_URL", "").strip()
+    if redis_url:
+        checks["redis"] = {
+            "status": "ok" if redis_active else "degraded",
+            "url": redis_url.split("@")[-1] if "@" in redis_url else redis_url,
+        }
+        if not redis_active:
+            checks["redis"]["detail"] = "configured but not reachable; using in-memory fallback"
+    else:
+        checks["redis"] = {"status": "disabled", "detail": "REDIS_URL not set"}
+
+    # --- Data cache ---
+    loaded = data_store_loaded()
+    cache_exists = os.path.exists(CACHE_PATH)
+    cache_info: dict = {"loaded_in_memory": loaded, "file_exists": cache_exists}
+    if cache_exists:
+        try:
+            stat = os.stat(CACHE_PATH)
+            cache_info["file_size_bytes"] = stat.st_size
+            cache_info["file_modified"] = datetime.fromtimestamp(
+                stat.st_mtime, tz=timezone.utc,
+            ).isoformat()
+            cache_info["age_seconds"] = round(time.time() - stat.st_mtime, 1)
+        except OSError:
+            pass
+    checks["cache"] = cache_info
+
+    # --- Last refresh ---
+    refresh = refresh_status_snapshot()
+    last_started = refresh.get("started_at")
+    checks["refresh"] = {
+        "running": refresh.get("running", False),
+        "last_started": (
+            datetime.fromtimestamp(last_started, tz=timezone.utc).isoformat()
+            if last_started else None
+        ),
+        "last_status": refresh.get("progress", ""),
+    }
+
+    # --- Workers ---
+    try:
+        import gunicorn.config  # noqa: F401
+        from gunicorn.conf import gunicorn_conf  # type: ignore
+        worker_count = None  # running under gunicorn but count not easily introspectable
+    except Exception:
+        worker_count = None
+    web_concurrency = os.environ.get("WEB_CONCURRENCY")
+    checks["workers"] = {
+        "web_concurrency": int(web_concurrency) if web_concurrency else "auto",
+        "pid": os.getpid(),
+    }
+
+    # --- Rate limit ---
+    rl = rate_limit_snapshot()
+    checks["github_rate_limit"] = {
+        "remaining": rl.get("remaining"),
+        "limit": rl.get("limit"),
+        "is_throttled": rl.get("is_throttled", False),
+    }
+
+    status_code = 200 if healthy else 503
+    return jsonify({"status": "healthy" if healthy else "degraded", "checks": checks}), status_code
 
 
 # ---------------------------------------------------------------------------

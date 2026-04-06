@@ -1742,9 +1742,14 @@
 
                 <!-- Time Breakdown Chart -->
                 <div class="section-card">
-                    <h5><i class="bi bi-layers me-2"></i>Time Breakdown for Merged PRs</h5>
-                    <div class="chart-container" style="height: ${Math.max(200, Math.min(mergedPrs.length * 28, 400))}px;">
-                        <canvas id="chartTimeBreakdown"></canvas>
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('timeBreakdownPanel', this)">
+                        <i class="bi bi-layers me-2"></i>Time Breakdown for Merged PRs
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="timeBreakdownPanel">
+                        <div class="chart-container" style="height: ${Math.max(200, Math.min(mergedPrs.length * 28, 400))}px;">
+                            <canvas id="chartTimeBreakdown"></canvas>
+                        </div>
                     </div>
                 </div>
 

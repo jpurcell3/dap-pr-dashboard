@@ -104,6 +104,19 @@ def compute_pr_metrics(pr_data: dict[str, Any]) -> dict[str, Any]:
     first_review_to_approval_hours = _hours_between(first_review_dt, first_approval_dt)
     approval_to_merge_hours = _hours_between(first_approval_dt, merged_at)
 
+    # Unattributed time: total cycle time minus the known phase segments.
+    # Covers rework after review, CI wait time, and any gaps where no
+    # formal approval was recorded before merge.
+    attributed = sum(
+        v for v in (
+            time_to_first_review_hours,
+            first_review_to_approval_hours,
+            approval_to_merge_hours,
+        )
+        if v is not None
+    )
+    unattributed_hours = max(total_cycle_time_hours - attributed, 0.0)
+
     # Review rounds: count of CHANGES_REQUESTED reviews
     review_rounds = sum(
         1 for r in sorted_reviews if r.get("state") == "CHANGES_REQUESTED"
@@ -159,6 +172,7 @@ def compute_pr_metrics(pr_data: dict[str, Any]) -> dict[str, Any]:
             if approval_to_merge_hours is not None
             else None
         ),
+        "unattributed_hours": round(unattributed_hours, 2),
         "review_rounds": review_rounds,
         "num_reviews": num_reviews,
         "num_comments": num_comments,

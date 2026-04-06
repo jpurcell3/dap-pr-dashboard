@@ -1853,6 +1853,12 @@
                             backgroundColor: '#bc8cff',
                             borderRadius: 2,
                         },
+                        {
+                            label: 'Rework / Unattributed',
+                            data: breakdownPrs.map(p => round(p.unattributed_hours || 0)),
+                            backgroundColor: '#f0883e',
+                            borderRadius: 2,
+                        },
                     ],
                 },
                 options: {

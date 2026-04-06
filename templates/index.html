@@ -73,7 +73,7 @@
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 6px;
-            padding: 0.75rem 1rem;
+            padding: 0.56rem 0.75rem;
             transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
@@ -83,21 +83,21 @@
         }
 
         .stat-card .stat-value {
-            font-size: 1.5rem;
+            font-size: 1.125rem;
             font-weight: 700;
             line-height: 1.2;
         }
 
         .stat-card .stat-label {
-            font-size: 0.72rem;
+            font-size: 0.54rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: #8b949e;
-            margin-top: 0.15rem;
+            margin-top: 0.11rem;
         }
 
         .stat-card .stat-icon {
-            font-size: 1.2rem;
+            font-size: 0.9rem;
             opacity: 0.7;
         }
 
@@ -473,6 +473,12 @@
             box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.15);
         }
 
+        /* Compact bottleneck filters */
+        .filter-bar .form-label { margin-bottom: 0.1rem; font-size: 0.65rem; }
+        .filter-bar .form-select { padding: 0.2rem 0.5rem; font-size: 0.75rem; height: auto; }
+        .filter-bar.row.g-3 { --bs-gutter-y: 0.25rem; }
+        .filter-bar-wrap { padding: 0.4rem 0.8rem; margin-bottom: 0.4rem; }
+
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bs-body-bg); }
@@ -705,6 +711,7 @@
                                     <div class="d-flex gap-2 mb-1">
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(true)">Select All</button>
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(false)">Clear All</button>
+                                        <button class="btn btn-outline-info btn-sm flex-fill" type="button" onclick="selectSyncedRepos()">Select Synced</button>
                                     </div>
                                     <div class="repo-checklist" id="repoChecklist">
                                         <div class="text-muted text-center py-2" style="font-size:0.8rem;">Loading repos...</div>
@@ -895,6 +902,20 @@
         if (state.charts[id]) {
             state.charts[id].destroy();
             delete state.charts[id];
+        }
+    }
+
+    /** Toggle a collapsible chart panel and rotate the chevron icon */
+    function toggleChartPanel(panelId, headerEl) {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        const icon = headerEl.querySelector('.toggle-icon');
+        if (panel.style.display === 'none') {
+            panel.style.display = '';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+        } else {
+            panel.style.display = 'none';
+            if (icon) icon.style.transform = 'rotate(180deg)';
         }
     }
 
@@ -1253,6 +1274,18 @@
         });
     }
 
+    /** Select only repos that have already been synced (has_data === true) */
+    function selectSyncedRepos() {
+        const synced = new Set(
+            (state.repoList || [])
+                .filter(r => typeof r === 'object' && r.has_data)
+                .map(r => r.name)
+        );
+        document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => {
+            cb.checked = synced.has(cb.value);
+        });
+    }
+
     /** Filter the repo checklist by search text.
      *  When a query is active every matching repo is shown (ignoring the
      *  20-item default cap).  When the query is cleared the list reverts
@@ -1482,9 +1515,14 @@
 
                 <!-- Chart: Avg Cycle Time per Repo -->
                 <div class="section-card">
-                    <h5><i class="bi bi-bar-chart me-2"></i>Average Cycle Time by Repository</h5>
-                    <div class="chart-container" style="height: ${Math.max(200, Math.min(repos.length * 32, 350))}px;">
-                        <canvas id="chartCycleByRepo"></canvas>
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('cycleByRepoPanel', this)">
+                        <i class="bi bi-bar-chart me-2"></i>Average Cycle Time by Repository
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="cycleByRepoPanel">
+                        <div class="chart-container" style="height: ${Math.max(200, Math.min(repos.length * 32, 350))}px;">
+                            <canvas id="chartCycleByRepo"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -2263,9 +2301,9 @@
             const lowCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
 
             let html = `
-                <h4 class="mb-4" style="color: #f0f6fc;">
-                    <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Bottleneck Analysis
-                </h4>
+                <h6 class="mb-2" style="color: #f0f6fc; font-size: 0.85rem;">
+                    <i class="bi bi-exclamation-triangle me-1 text-warning"></i>Bottleneck Analysis
+                </h6>
 
                 <!-- Summary Stats -->
                 <div class="row g-2 mb-3">
@@ -2296,7 +2334,7 @@
                 </div>
 
                 <!-- Filters -->
-                <div class="section-card">
+                <div class="section-card filter-bar-wrap">
                     <div class="row g-3 filter-bar">
                         <div class="col-md-4">
                             <label class="form-label text-muted small">Repository</label>

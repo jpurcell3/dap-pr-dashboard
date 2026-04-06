@@ -569,7 +569,11 @@ def fetch_commit_checks(
             check_name = cr.get("name", "")
             raw_summary = (cr.get("output") or {}).get("summary", "")
             raw_title = (cr.get("output") or {}).get("title", "")
-            summary_text = _strip_html(raw_summary)
+            # Twistlock: extract only the Scan Summary, discard boilerplate.
+            if check_name.lower() == "twistlock":
+                summary_text = _extract_twistlock_summary(raw_summary)
+            else:
+                summary_text = _strip_html(raw_summary)
             # Drop the output title when it just repeats the check name
             # (e.g. Twistlock sets title="twistlock") to avoid duplication.
             output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
@@ -642,6 +646,31 @@ def _strip_html(text: str) -> str:
     """Remove HTML tags from a string (best-effort)."""
     import re
     return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def _extract_twistlock_summary(raw_summary: str) -> str:
+    """Extract only the Scan Summary Result and Recommended Action from
+    Twistlock check output, discarding the boilerplate description.
+
+    Returns a compact plain-text string.  Falls back to the full
+    HTML-stripped text if the expected markers are not found.
+    """
+    import re
+    scan_match = re.search(
+        r"\*{3}Scan Summary Result:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+    )
+    action_match = re.search(
+        r"\*{3}Recommended Action:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+    )
+    if scan_match or action_match:
+        parts = []
+        if scan_match:
+            parts.append(f"Scan Summary: {scan_match.group(1).strip()}")
+        if action_match:
+            parts.append(f"Action: {action_match.group(1).strip()}")
+        return " | ".join(parts)
+    # Fallback: strip HTML and return full text
+    return _strip_html(raw_summary)
 
 
 # ---------------------------------------------------------------------------

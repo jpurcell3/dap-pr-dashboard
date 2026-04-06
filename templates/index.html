@@ -2166,7 +2166,7 @@
                                 ${c.conclusion === 'failure' && (c.output_title || c.output_summary) ? `
                                     <div class="check-failure-detail">
                                         ${c.output_title ? `<strong>${esc(c.output_title)}</strong>` : ''}
-                                        ${c.output_summary ? `<span class="ms-1">${esc(truncate(c.output_summary, 150))}</span>` : ''}
+                                        ${c.output_summary ? `<span class="ms-1">${esc(truncate(c.output_summary, 500))}</span>` : ''}
                                     </div>` : ''}
                             `).join('')}
                         </div>`;

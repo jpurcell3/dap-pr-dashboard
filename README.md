@@ -71,6 +71,8 @@ All configuration is via environment variables (or `.env` file):
 | `REDIS_URL` | *(unset)* | Redis connection URL for shared state (e.g. `redis://localhost:6379/0`). When unset, in-memory dicts are used. |
 | `WEB_CONCURRENCY` | `4` (with Redis) / `1` (without) | Number of gunicorn worker processes. Auto-scales based on Redis availability. |
 | `AUTO_REFRESH_INTERVAL_MINUTES` | `0` (disabled) | Periodic background sync interval. Set to e.g. `60` for hourly auto-refresh. |
+| `MAX_CONCURRENT_REPOS` | `4` | Number of repos to fetch in parallel during a refresh. |
+| `MAX_CONCURRENT_PRS` | `6` | Number of PRs to enrich in parallel within each repo. |
 
 ## Running with Docker
 

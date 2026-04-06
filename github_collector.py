@@ -14,6 +14,7 @@ import os
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -60,6 +61,13 @@ SSL_VERIFY = os.environ.get("SSL_VERIFY", "false").lower() not in ("false", "0",
 DEFAULT_CACHE_PATH = Path(__file__).parent / "pr_cache.json"
 DEFAULT_PR_LOOKBACK_DAYS = int(os.environ.get("DEFAULT_PR_LOOKBACK_DAYS", "90"))
 MAX_PRS_PER_REPO = int(os.environ.get("MAX_PRS_PER_REPO", "500"))
+
+# Concurrency settings — control parallelism during refresh.
+# MAX_CONCURRENT_REPOS: how many repos to enrich in parallel.
+# MAX_CONCURRENT_PRS: how many PRs to enrich in parallel *within* a repo.
+# Keep the product modest to avoid rate-limit exhaustion.
+MAX_CONCURRENT_REPOS = int(os.environ.get("MAX_CONCURRENT_REPOS", "4"))
+MAX_CONCURRENT_PRS = int(os.environ.get("MAX_CONCURRENT_PRS", "6"))
 
 logger.info(
     "Config loaded — API: %s | Org: %s | Prefix: %r | SSL verify: %s",
@@ -474,25 +482,30 @@ def fetch_pr_comments(
     review_comments: list[dict] = []
     issue_comments: list[dict] = []
 
-    try:
-        review_comments = _get_paginated(review_comments_url, headers)
-    except requests.HTTPError as exc:
-        logger.error(
-            "Failed to fetch review comments for %s#%d: %s",
-            repo_name,
-            pr_number,
-            exc,
-        )
+    # Fire both paginated requests concurrently.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        future_review = pool.submit(_get_paginated, review_comments_url, headers)
+        future_issue = pool.submit(_get_paginated, issue_comments_url, headers)
 
-    try:
-        issue_comments = _get_paginated(issue_comments_url, headers)
-    except requests.HTTPError as exc:
-        logger.error(
-            "Failed to fetch issue comments for %s#%d: %s",
-            repo_name,
-            pr_number,
-            exc,
-        )
+        try:
+            review_comments = future_review.result()
+        except requests.HTTPError as exc:
+            logger.error(
+                "Failed to fetch review comments for %s#%d: %s",
+                repo_name,
+                pr_number,
+                exc,
+            )
+
+        try:
+            issue_comments = future_issue.result()
+        except requests.HTTPError as exc:
+            logger.error(
+                "Failed to fetch issue comments for %s#%d: %s",
+                repo_name,
+                pr_number,
+                exc,
+            )
 
     return {
         "review_comments": review_comments,
@@ -549,72 +562,83 @@ def fetch_commit_checks(
     ``overall_state``.
     """
     headers = _build_headers(token)
-    checks: list[dict] = []
 
-    # --- GitHub Apps check-runs -----------------------------------------------
-    try:
-        url = (
-            f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
-            f"/commits/{sha}/check-runs"
-        )
-        headers_cr = {**headers, "Accept": "application/vnd.github.v3+json"}
-        resp = requests.get(
-            url, headers=headers_cr, verify=SSL_VERIFY, timeout=30
-        )
-        _check_rate_limit(resp)
-        resp.raise_for_status()
-        data = resp.json()
-        for cr in data.get("check_runs", []):
-            conclusion = (cr.get("conclusion") or "pending").lower()
-            check_name = cr.get("name", "")
-            raw_summary = (cr.get("output") or {}).get("summary", "")
-            raw_title = (cr.get("output") or {}).get("title", "")
-            # Twistlock: extract only the Scan Summary, discard boilerplate.
-            if check_name.lower() == "twistlock":
-                summary_text = _extract_twistlock_summary(raw_summary)
-            else:
-                summary_text = _strip_html(raw_summary)
-            # Drop the output title when it just repeats the check name
-            # (e.g. Twistlock sets title="twistlock") to avoid duplication.
-            output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
-            checks.append({
-                "name": check_name,
-                "status": cr.get("status", ""),
-                "conclusion": conclusion,
-                "details_url": cr.get("details_url") or cr.get("html_url", ""),
-                "output_title": output_title,
-                "output_summary": summary_text,
-            })
-    except Exception:
-        logger.debug(
-            "Failed to fetch check-runs for %s@%s", repo_name, sha[:8],
-            exc_info=True,
-        )
+    def _fetch_check_runs() -> list[dict]:
+        """GitHub Apps check-runs."""
+        results: list[dict] = []
+        try:
+            url = (
+                f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
+                f"/commits/{sha}/check-runs"
+            )
+            headers_cr = {**headers, "Accept": "application/vnd.github.v3+json"}
+            resp = requests.get(
+                url, headers=headers_cr, verify=SSL_VERIFY, timeout=30
+            )
+            _check_rate_limit(resp)
+            resp.raise_for_status()
+            data = resp.json()
+            for cr in data.get("check_runs", []):
+                conclusion = (cr.get("conclusion") or "pending").lower()
+                check_name = cr.get("name", "")
+                raw_summary = (cr.get("output") or {}).get("summary", "")
+                raw_title = (cr.get("output") or {}).get("title", "")
+                # Twistlock: extract only the Scan Summary, discard boilerplate.
+                if check_name.lower() == "twistlock":
+                    summary_text = _extract_twistlock_summary(raw_summary)
+                else:
+                    summary_text = _strip_html(raw_summary)
+                # Drop the output title when it just repeats the check name
+                # (e.g. Twistlock sets title="twistlock") to avoid duplication.
+                output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
+                results.append({
+                    "name": check_name,
+                    "status": cr.get("status", ""),
+                    "conclusion": conclusion,
+                    "details_url": cr.get("details_url") or cr.get("html_url", ""),
+                    "output_title": output_title,
+                    "output_summary": summary_text,
+                })
+        except Exception:
+            logger.debug(
+                "Failed to fetch check-runs for %s@%s", repo_name, sha[:8],
+                exc_info=True,
+            )
+        return results
 
-    # --- Classic commit statuses ----------------------------------------------
-    try:
-        url = (
-            f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
-            f"/commits/{sha}/status"
-        )
-        resp = requests.get(url, headers=headers, verify=SSL_VERIFY, timeout=30)
-        _check_rate_limit(resp)
-        resp.raise_for_status()
-        status_data = resp.json()
-        for s in status_data.get("statuses", []):
-            checks.append({
-                "name": s.get("context", ""),
-                "status": "completed",
-                "conclusion": s.get("state", "pending"),
-                "details_url": s.get("target_url", ""),
-                "output_title": s.get("description", ""),
-                "output_summary": "",
-            })
-    except Exception:
-        logger.debug(
-            "Failed to fetch commit status for %s@%s", repo_name, sha[:8],
-            exc_info=True,
-        )
+    def _fetch_commit_statuses() -> list[dict]:
+        """Classic commit statuses."""
+        results: list[dict] = []
+        try:
+            url = (
+                f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
+                f"/commits/{sha}/status"
+            )
+            resp = requests.get(url, headers=headers, verify=SSL_VERIFY, timeout=30)
+            _check_rate_limit(resp)
+            resp.raise_for_status()
+            status_data = resp.json()
+            for s in status_data.get("statuses", []):
+                results.append({
+                    "name": s.get("context", ""),
+                    "status": "completed",
+                    "conclusion": s.get("state", "pending"),
+                    "details_url": s.get("target_url", ""),
+                    "output_title": s.get("description", ""),
+                    "output_summary": "",
+                })
+        except Exception:
+            logger.debug(
+                "Failed to fetch commit status for %s@%s", repo_name, sha[:8],
+                exc_info=True,
+            )
+        return results
+
+    # Fire both requests concurrently.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_cr = pool.submit(_fetch_check_runs)
+        f_st = pool.submit(_fetch_commit_statuses)
+        checks: list[dict] = f_cr.result() + f_st.result()
 
     # --- Build summary --------------------------------------------------------
     total = len(checks)
@@ -677,6 +701,103 @@ def _extract_twistlock_summary(raw_summary: str) -> str:
 # Aggregate fetch
 # ---------------------------------------------------------------------------
 
+def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
+    """Enrich a single PR dict with reviews, timeline, comments, commits, and checks.
+
+    All five enrichment calls are fired concurrently using a
+    :class:`ThreadPoolExecutor`.  The ``commits`` result is needed before
+    ``checks`` can be fetched (we need the HEAD SHA), so commits is fetched
+    in the same pool and checks is chained from its result.
+    """
+    pr_number: int = pr["number"]
+
+    # --- helper closures (submitted to pool) --------------------------------
+    def _reviews():
+        try:
+            return fetch_pr_reviews(repo_name, pr_number, token=token)
+        except Exception:
+            logger.error("Error fetching reviews for %s#%d", repo_name, pr_number, exc_info=True)
+            return []
+
+    def _timeline():
+        try:
+            return fetch_pr_timeline(repo_name, pr_number, token=token)
+        except Exception:
+            logger.error("Error fetching timeline for %s#%d", repo_name, pr_number, exc_info=True)
+            return []
+
+    def _comments():
+        try:
+            return fetch_pr_comments(repo_name, pr_number, token=token)
+        except Exception:
+            logger.error("Error fetching comments for %s#%d", repo_name, pr_number, exc_info=True)
+            return {"review_comments": [], "issue_comments": []}
+
+    def _commits():
+        try:
+            return fetch_pr_commits(repo_name, pr_number, token=token)
+        except Exception:
+            logger.error("Error fetching commits for %s#%d", repo_name, pr_number, exc_info=True)
+            return []
+
+    empty_checks = {"total": 0, "success": 0, "failure": 0,
+                    "pending": 0, "overall_state": "unknown", "checks": []}
+
+    # Submit the four independent calls concurrently.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        f_reviews = pool.submit(_reviews)
+        f_timeline = pool.submit(_timeline)
+        f_comments = pool.submit(_comments)
+        f_commits = pool.submit(_commits)
+
+    pr["reviews"] = f_reviews.result()
+    pr["timeline_events"] = f_timeline.result()
+    comments = f_comments.result()
+    pr["review_comments"] = comments["review_comments"]
+    pr["issue_comments"] = comments["issue_comments"]
+    pr["commits"] = f_commits.result()
+
+    # Checks depend on commits (need HEAD SHA) — fetch sequentially after.
+    try:
+        if pr["commits"]:
+            head_sha = pr["commits"][-1]["sha"]
+            pr["checks"] = fetch_commit_checks(repo_name, head_sha, token=token)
+        else:
+            pr["checks"] = empty_checks
+    except Exception:
+        logger.error("Error fetching checks for %s#%d", repo_name, pr_number, exc_info=True)
+        pr["checks"] = empty_checks
+
+    return pr
+
+
+def _enrich_repo(
+    repo_name: str,
+    token: str,
+    since: str | None,
+) -> list[dict]:
+    """Fetch and enrich all PRs for a single repo.
+
+    PRs within the repo are enriched in parallel (up to
+    ``MAX_CONCURRENT_PRS`` at a time).
+    """
+    prs = fetch_prs_for_repo(repo_name, token=token, since=since)
+    if not prs:
+        return []
+
+    enriched: list[dict] = []
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_PRS) as pool:
+        futures = {
+            pool.submit(_enrich_single_pr, repo_name, pr, token): pr
+            for pr in prs
+        }
+        for future in as_completed(futures):
+            _check_cancelled()
+            enriched.append(future.result())
+
+    return enriched
+
+
 def fetch_all_data(
     repos: list[str] | None = None,
     progress_callback=None,
@@ -685,6 +806,10 @@ def fetch_all_data(
 ) -> dict[str, list[dict]]:
     """Fetch all PRs (with reviews, timeline, and comments) for fusion repos.
 
+    Repos are processed in parallel (up to ``MAX_CONCURRENT_REPOS``).
+    Within each repo, individual PRs are enriched concurrently (up to
+    ``MAX_CONCURRENT_PRS``).
+
     Parameters
     ----------
     repos:
@@ -692,7 +817,8 @@ def fetch_all_data(
         :func:`get_fusion_repos`.
     progress_callback:
         Optional callable ``(repo_name, current_index, total_repos) -> None``
-        invoked once per repo before fetching begins.
+        invoked once per repo when it *completes* (ordering may differ from
+        the input list due to parallelism).
     token:
         Optional pre-fetched GitHub token.
     since:
@@ -716,90 +842,33 @@ def fetch_all_data(
     # Clear cancel flag at start of a new fetch
     _cancel_event.clear()
 
-    for idx, repo_name in enumerate(repos, start=1):
-        _check_cancelled()
+    # Track completion order for progress reporting.
+    _completed_count = [0]  # mutable container for closure access
+    _lock = threading.Lock()
 
+    def _repo_task(repo_name: str) -> tuple[str, list[dict]]:
+        """Fetch + enrich a single repo; report progress on completion."""
+        _check_cancelled()
+        logger.info("Processing repo: %s", repo_name)
+        enriched = _enrich_repo(repo_name, token, since)
+        # Report progress (thread-safe counter).
+        with _lock:
+            _completed_count[0] += 1
+            done = _completed_count[0]
         if progress_callback is not None:
             try:
-                progress_callback(repo_name, idx, total)
+                progress_callback(repo_name, done, total)
             except Exception:
-                logger.debug("progress_callback raised an exception", exc_info=True)
+                logger.debug("progress_callback raised", exc_info=True)
+        logger.info("Finished %s: %d PRs collected and enriched.", repo_name, len(enriched))
+        return repo_name, enriched
 
-        logger.info("Processing repo %d/%d: %s", idx, total, repo_name)
-        prs = fetch_prs_for_repo(repo_name, token=token, since=since)
-
-        enriched_prs: list[dict] = []
-        for pr in prs:
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REPOS) as pool:
+        futures = {pool.submit(_repo_task, rn): rn for rn in repos}
+        for future in as_completed(futures):
             _check_cancelled()
-            pr_number: int = pr["number"]
-            try:
-                pr["reviews"] = fetch_pr_reviews(repo_name, pr_number, token=token)
-            except Exception:
-                logger.error(
-                    "Unexpected error fetching reviews for %s#%d",
-                    repo_name,
-                    pr_number,
-                    exc_info=True,
-                )
-                pr["reviews"] = []
-
-            try:
-                pr["timeline_events"] = fetch_pr_timeline(
-                    repo_name, pr_number, token=token
-                )
-            except Exception:
-                logger.error(
-                    "Unexpected error fetching timeline for %s#%d",
-                    repo_name,
-                    pr_number,
-                    exc_info=True,
-                )
-                pr["timeline_events"] = []
-
-            try:
-                comments = fetch_pr_comments(repo_name, pr_number, token=token)
-                pr["review_comments"] = comments["review_comments"]
-                pr["issue_comments"] = comments["issue_comments"]
-            except Exception:
-                logger.error(
-                    "Unexpected error fetching comments for %s#%d",
-                    repo_name,
-                    pr_number,
-                    exc_info=True,
-                )
-                pr["review_comments"] = []
-                pr["issue_comments"] = []
-
-            try:
-                pr["commits"] = fetch_pr_commits(repo_name, pr_number, token=token)
-                # Fetch checks for the HEAD (last) commit
-                if pr["commits"]:
-                    head_sha = pr["commits"][-1]["sha"]
-                    pr["checks"] = fetch_commit_checks(
-                        repo_name, head_sha, token=token
-                    )
-                else:
-                    pr["checks"] = {"total": 0, "success": 0, "failure": 0,
-                                    "pending": 0, "overall_state": "unknown",
-                                    "checks": []}
-            except Exception:
-                logger.error(
-                    "Unexpected error fetching commits/checks for %s#%d",
-                    repo_name,
-                    pr_number,
-                    exc_info=True,
-                )
-                pr["commits"] = []
-                pr["checks"] = {"total": 0, "success": 0, "failure": 0,
-                                "pending": 0, "overall_state": "unknown",
-                                "checks": []}
-
-            enriched_prs.append(pr)
-
-        result[repo_name] = enriched_prs
-        logger.info(
-            "Finished %s: %d PRs collected and enriched.", repo_name, len(enriched_prs)
-        )
+            repo_name, enriched_prs = future.result()
+            result[repo_name] = enriched_prs
 
     return result
 

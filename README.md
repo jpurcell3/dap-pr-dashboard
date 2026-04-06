@@ -68,6 +68,7 @@ All configuration is via environment variables (or `.env` file):
 | `MAX_PRS_PER_REPO` | `500` | Safety cap on PRs fetched per repo |
 | `CACHE_PATH` | `pr_cache.json` (next to app.py) | Override the cache file location |
 | `LOG_TO_STDOUT` | *(unset)* | Set `true` to skip writing `server.log` |
+| `REDIS_URL` | *(unset)* | Redis connection URL for shared state (e.g. `redis://localhost:6379/0`). When unset, in-memory dicts are used. |
 
 ## Running with Docker
 
@@ -91,6 +92,8 @@ docker compose up --build         # http://localhost:5001
 ```
 
 The `docker-compose.yml` bind-mounts your project directory into the container, and gunicorn runs with `--reload`. Any file you save locally is picked up by both the local dev server and the container automatically.
+
+The Docker Compose setup includes a Redis sidecar. The dashboard container connects to it automatically via `REDIS_URL`. This means multiple gunicorn workers (or container replicas) share refresh status and data state through Redis.
 
 If you change `requirements.txt`, rebuild the container:
 
@@ -125,11 +128,12 @@ fusion-pr-dashboard/
   app.py                 # Flask server and API routes
   github_collector.py    # GitHub API client (PRs, reviews, commits, checks)
   metrics.py             # Cycle-time metrics and bottleneck detection
+  redis_state.py         # Redis-backed shared state (falls back to in-memory)
   templates/index.html   # Single-page dashboard UI
   requirements.txt       # Python dependencies
   .env.example           # Configuration template
   Dockerfile             # Container image definition
-  docker-compose.yml     # Dev container with bind mount and watch support
+  docker-compose.yml     # Dev container with Redis sidecar
   .dockerignore
   .gitignore
 ```

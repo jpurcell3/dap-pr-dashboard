@@ -7,9 +7,13 @@ services:
     environment:
       - CACHE_PATH=/data/pr_cache.json
       - LOG_TO_STDOUT=true
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - .:/app                       # bind mount: local edits sync instantly
       - cache_data:/data             # persistent cache (separate from local pr_cache.json)
+    depends_on:
+      redis:
+        condition: service_started
     develop:
       watch:
         - action: sync               # file changes → live sync (covered by bind mount too)
@@ -23,5 +27,14 @@ services:
         - action: rebuild            # dependency changes → full rebuild
           path: requirements.txt
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"                  # expose for local debugging; remove in production
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --dir /data
+
 volumes:
   cache_data:
+  redis_data:

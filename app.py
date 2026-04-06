@@ -16,11 +16,18 @@ from flask import Flask, jsonify, render_template, request
 
 from github_collector import (
     fetch_all_data, get_fusion_repos, get_all_org_repos, load_cache, save_cache,
-    rate_limit_info, cancel_refresh, RefreshCancelled,
+    cancel_refresh, RefreshCancelled,
     GITHUB_API_BASE, ORG_NAME, REPO_PREFIX,
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
 )
 from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
+from redis_state import (
+    data_store_get, data_store_set, data_store_update,
+    data_store_loaded, data_store_snapshot,
+    refresh_status_get, refresh_status_set, refresh_status_bulk_set,
+    refresh_status_snapshot, refresh_status_reset,
+    rate_limit_get, rate_limit_snapshot,
+)
 
 # ---------------------------------------------------------------------------
 # Derive the GitHub *web* URL from the API URL so the frontend can build
@@ -69,28 +76,6 @@ CACHE_PATH = os.environ.get(
     os.path.join(os.path.dirname(__file__), "pr_cache.json"),
 )
 
-# In-memory store populated from cache or a /api/refresh call.
-_data_store: dict = {
-    "raw_prs": {},        # repo_name -> [raw PR dicts]
-    "repo_summaries": [], # list of per-repo summary dicts
-    "pr_metrics": {},     # repo_name -> [pr metric dicts]
-    "bottlenecks": [],    # flat list of bottleneck dicts
-    "loaded": False,
-}
-
-# Background refresh tracking
-_refresh_status: dict = {
-    "running": False,
-    "progress": "",
-    "current_repo": "",
-    "repos_done": 0,
-    "repos_total": 0,
-    "prs_fetched": 0,
-    "started_at": None,
-    "error": None,
-    "scope": "all",
-}
-
 
 # ---------------------------------------------------------------------------
 # CORS
@@ -107,7 +92,7 @@ def add_cors_headers(response):
 # Helpers
 # ---------------------------------------------------------------------------
 def _load_cache_into_store() -> bool:
-    """Try to load the JSON cache file into the in-memory store.
+    """Try to load the JSON cache file into the shared state store.
     Returns True on success, False otherwise."""
     if not os.path.exists(CACHE_PATH):
         logger.info("No cache file found at %s", CACHE_PATH)
@@ -118,11 +103,13 @@ def _load_cache_into_store() -> bool:
         if not cached:
             return False
 
-        _data_store["raw_prs"] = cached.get("raw_prs", {})
-        _data_store["repo_summaries"] = cached.get("repo_summaries", [])
-        _data_store["pr_metrics"] = cached.get("pr_metrics", {})
-        _data_store["bottlenecks"] = cached.get("bottlenecks", [])
-        _data_store["loaded"] = True
+        data_store_update({
+            "raw_prs": cached.get("raw_prs", {}),
+            "repo_summaries": cached.get("repo_summaries", []),
+            "pr_metrics": cached.get("pr_metrics", {}),
+            "bottlenecks": cached.get("bottlenecks", []),
+            "loaded": True,
+        })
         logger.info("Cache loaded successfully from %s", CACHE_PATH)
         return True
     except Exception:
@@ -214,9 +201,10 @@ def api_repos():
         if not show_all:
             # Simple mode: only repos with data (string list)
             repos = get_fusion_repos()
-            if _data_store["loaded"]:
+            if data_store_loaded():
+                raw_prs = data_store_get("raw_prs", {})
                 repos_with_data = {
-                    name for name, prs in _data_store.get("raw_prs", {}).items()
+                    name for name, prs in raw_prs.items()
                     if prs
                 }
                 repos = [r for r in repos if r in repos_with_data]
@@ -224,7 +212,7 @@ def api_repos():
 
         # Full mode: all org repos with priority scoring
         all_names = get_all_org_repos()
-        raw_prs = _data_store.get("raw_prs", {}) if _data_store["loaded"] else {}
+        raw_prs = data_store_get("raw_prs", {}) if data_store_loaded() else {}
 
         scored: list[dict] = []
         for name in all_names:
@@ -272,26 +260,34 @@ def _do_refresh(repos=None, since=None, until=None):
         is_partial = repos is not None
         scope_label = ", ".join(repos) if is_partial else "all repos"
 
-        _refresh_status["running"] = True
-        _refresh_status["error"] = None
-        _refresh_status["started_at"] = time.time()
-        _refresh_status["scope"] = scope_label
+        refresh_status_bulk_set({
+            "running": True,
+            "error": None,
+            "started_at": time.time(),
+            "scope": scope_label,
+        })
 
         if is_partial:
-            _refresh_status["repos_total"] = len(repos)
-            _refresh_status["progress"] = f"Fetching PRs for {scope_label}..."
+            refresh_status_bulk_set({
+                "repos_total": len(repos),
+                "progress": f"Fetching PRs for {scope_label}...",
+            })
             logger.info("Refresh (partial): repos=%s, since=%s, until=%s", repos, since, until)
         else:
-            _refresh_status["progress"] = "Discovering repos..."
+            refresh_status_set("progress", "Discovering repos...")
             repos = get_fusion_repos()
-            _refresh_status["repos_total"] = len(repos)
-            _refresh_status["progress"] = f"Found {len(repos)} repos. Fetching PRs..."
+            refresh_status_bulk_set({
+                "repos_total": len(repos),
+                "progress": f"Found {len(repos)} repos. Fetching PRs...",
+            })
             logger.info("Refresh: found %d fusion repos", len(repos))
 
         def progress_cb(repo_name, current, total):
-            _refresh_status["current_repo"] = repo_name
-            _refresh_status["repos_done"] = current - 1
-            _refresh_status["progress"] = f"Fetching {repo_name} ({current}/{total})..."
+            refresh_status_bulk_set({
+                "current_repo": repo_name,
+                "repos_done": current - 1,
+                "progress": f"Fetching {repo_name} ({current}/{total})...",
+            })
             logger.info("Refresh progress: %s (%d/%d)", repo_name, current, total)
 
         raw_prs = fetch_all_data(repos, progress_callback=progress_cb, since=since)
@@ -306,15 +302,17 @@ def _do_refresh(repos=None, since=None, until=None):
                 ]
 
         total_prs = sum(len(v) for v in raw_prs.values())
-        _refresh_status["prs_fetched"] = total_prs
-        _refresh_status["repos_done"] = len(repos)
-        _refresh_status["progress"] = "Computing metrics..."
+        refresh_status_bulk_set({
+            "prs_fetched": total_prs,
+            "repos_done": len(repos),
+            "progress": "Computing metrics...",
+        })
         logger.info("Refresh: fetched %d total PRs, computing metrics...", total_prs)
 
         if is_partial:
             # --- Partial refresh: merge new data into existing store --------
             # Update only the refreshed repos in raw_prs
-            merged_raw = dict(_data_store.get("raw_prs", {}))
+            merged_raw = dict(data_store_get("raw_prs", {}))
             for repo_name in raw_prs:
                 merged_raw[repo_name] = raw_prs[repo_name]
 
@@ -324,7 +322,7 @@ def _do_refresh(repos=None, since=None, until=None):
             pr_metrics = all_metrics.get("pr_metrics", {})
             bottlenecks = all_metrics.get("bottlenecks", [])
 
-            _refresh_status["progress"] = "Saving cache..."
+            refresh_status_set("progress", "Saving cache...")
             cache_payload = {
                 "raw_prs": merged_raw,
                 "repo_summaries": repo_summaries,
@@ -333,8 +331,8 @@ def _do_refresh(repos=None, since=None, until=None):
             }
             save_cache(cache_payload, CACHE_PATH)
 
-            _data_store.update(cache_payload)
-            _data_store["loaded"] = True
+            data_store_update(cache_payload)
+            data_store_set("loaded", True)
         else:
             # --- Full refresh: replace everything --------------------------
             all_metrics = compute_all_metrics(raw_prs)
@@ -342,7 +340,7 @@ def _do_refresh(repos=None, since=None, until=None):
             pr_metrics = all_metrics.get("pr_metrics", {})
             bottlenecks = all_metrics.get("bottlenecks", [])
 
-            _refresh_status["progress"] = "Saving cache..."
+            refresh_status_set("progress", "Saving cache...")
             cache_payload = {
                 "raw_prs": raw_prs,
                 "repo_summaries": repo_summaries,
@@ -351,23 +349,26 @@ def _do_refresh(repos=None, since=None, until=None):
             }
             save_cache(cache_payload, CACHE_PATH)
 
-            _data_store.update(cache_payload)
-            _data_store["loaded"] = True
+            data_store_update(cache_payload)
+            data_store_set("loaded", True)
 
-        _refresh_status["progress"] = "Complete!"
-        _refresh_status["running"] = False
+        refresh_status_bulk_set({"progress": "Complete!", "running": False})
         logger.info("Refresh complete: %d repos, %d PRs", len(repos), total_prs)
 
     except RefreshCancelled:
         logger.info("Refresh cancelled by user.")
-        _refresh_status["running"] = False
-        _refresh_status["progress"] = "Cancelled."
-        _refresh_status["error"] = None
+        refresh_status_bulk_set({
+            "running": False,
+            "progress": "Cancelled.",
+            "error": None,
+        })
     except Exception as exc:
         logger.exception("Refresh failed")
-        _refresh_status["error"] = str(exc)
-        _refresh_status["running"] = False
-        _refresh_status["progress"] = f"Error: {exc}"
+        refresh_status_bulk_set({
+            "error": str(exc),
+            "running": False,
+            "progress": f"Error: {exc}",
+        })
 
 
 @app.route("/api/refresh")
@@ -387,8 +388,8 @@ def api_refresh():
         ISO date (``YYYY-MM-DD``).  Exclude PRs created after this date
         (applied after fetch, before metric computation).
     """
-    if _refresh_status["running"]:
-        return jsonify({"status": "already_running", **_refresh_status})
+    if refresh_status_get("running"):
+        return jsonify({"status": "already_running", **refresh_status_snapshot()})
 
     repo_param = request.args.get("repo")
     since = request.args.get("since")   # e.g. "2024-01-01"
@@ -421,26 +422,28 @@ def api_refresh():
 @app.route("/api/refresh/status")
 def api_refresh_status():
     """Return current refresh progress including rate limit info."""
+    status = refresh_status_snapshot()
     elapsed = None
-    if _refresh_status["started_at"]:
-        elapsed = round(time.time() - _refresh_status["started_at"], 1)
+    if status.get("started_at"):
+        elapsed = round(time.time() - status["started_at"], 1)
 
     # Build human-readable reset time
+    reset_at = rate_limit_get("reset_at")
     reset_str = None
-    if rate_limit_info["reset_at"]:
-        reset_str = time.strftime("%H:%M:%S UTC", time.gmtime(rate_limit_info["reset_at"]))
+    if reset_at:
+        reset_str = time.strftime("%H:%M:%S UTC", time.gmtime(reset_at))
 
     return jsonify({
-        **_refresh_status,
+        **status,
         "elapsed_seconds": elapsed,
-        "data_loaded": _data_store["loaded"],
+        "data_loaded": data_store_loaded(),
         "rate_limit": {
-            "remaining": rate_limit_info["remaining"],
-            "limit": rate_limit_info["limit"],
-            "used": rate_limit_info["used"],
+            "remaining": rate_limit_get("remaining"),
+            "limit": rate_limit_get("limit"),
+            "used": rate_limit_get("used"),
             "resets_at": reset_str,
-            "is_throttled": rate_limit_info["is_throttled"],
-            "throttled_until": rate_limit_info["throttled_until"],
+            "is_throttled": rate_limit_get("is_throttled"),
+            "throttled_until": rate_limit_get("throttled_until"),
         },
     })
 
@@ -448,7 +451,7 @@ def api_refresh_status():
 @app.route("/api/refresh/cancel", methods=["GET", "POST"])
 def api_refresh_cancel():
     """Cancel a running refresh."""
-    if not _refresh_status["running"]:
+    if not refresh_status_get("running"):
         return jsonify({"status": "not_running", "message": "No refresh is currently running."})
 
     cancel_refresh()
@@ -460,7 +463,7 @@ def api_refresh_cancel():
 @app.route("/api/summary")
 def api_summary():
     """Return repo summaries and overview statistics (from cache)."""
-    if not _data_store["loaded"]:
+    if not data_store_loaded():
         return (
             jsonify(
                 {
@@ -472,7 +475,7 @@ def api_summary():
         )
 
     repo_summaries = [
-        s for s in _data_store["repo_summaries"]
+        s for s in data_store_get("repo_summaries", [])
         if s.get("total_prs") and s["total_prs"] > 0
     ]
     overview = _build_overview(repo_summaries)
@@ -484,7 +487,7 @@ def api_summary():
 @app.route("/api/repo/<repo_name>")
 def api_repo(repo_name: str):
     """Return detailed PR metrics for a specific repository."""
-    if not _data_store["loaded"]:
+    if not data_store_loaded():
         return (
             jsonify(
                 {
@@ -497,14 +500,14 @@ def api_repo(repo_name: str):
 
     # Find the repo summary
     repo_summary = next(
-        (s for s in _data_store["repo_summaries"] if s.get("repo") == repo_name),
+        (s for s in data_store_get("repo_summaries", []) if s.get("repo") == repo_name),
         None,
     )
     if repo_summary is None:
         return jsonify({"error": f"Repository '{repo_name}' not found"}), 404
 
     # Grab PR-level metrics and sort by cycle time descending
-    prs = list(_data_store["pr_metrics"].get(repo_name, []))
+    prs = list(data_store_get("pr_metrics", {}).get(repo_name, []))
     prs.sort(key=lambda p: p.get("total_cycle_time_hours", 0) or 0, reverse=True)
 
     return jsonify({"repo_summary": repo_summary, "prs": prs})
@@ -514,32 +517,35 @@ def api_repo(repo_name: str):
 @app.route("/api/repo/<repo_name>/purge", methods=["POST", "DELETE"])
 def api_repo_purge(repo_name: str):
     """Remove all cached data for a repository and re-save the cache."""
-    if not _data_store["loaded"]:
+    if not data_store_loaded():
         return jsonify({"error": "No data loaded"}), 400
 
     # Check the repo actually has data
-    if repo_name not in _data_store.get("raw_prs", {}):
+    raw_prs = data_store_get("raw_prs", {})
+    if repo_name not in raw_prs:
         return jsonify({"error": f"No data for '{repo_name}'"}), 404
 
     # Remove from every section of the data store
-    _data_store["raw_prs"].pop(repo_name, None)
-    _data_store["pr_metrics"].pop(repo_name, None)
-    _data_store["repo_summaries"] = [
-        s for s in _data_store["repo_summaries"]
+    raw_prs.pop(repo_name, None)
+    pr_metrics = data_store_get("pr_metrics", {})
+    pr_metrics.pop(repo_name, None)
+    repo_summaries = [
+        s for s in data_store_get("repo_summaries", [])
         if s.get("repo") != repo_name
     ]
-    _data_store["bottlenecks"] = [
-        b for b in _data_store["bottlenecks"]
+    bottlenecks = [
+        b for b in data_store_get("bottlenecks", [])
         if b.get("repo") != repo_name
     ]
 
-    # Persist updated cache
+    # Write back and persist updated cache
     cache_payload = {
-        "raw_prs": _data_store["raw_prs"],
-        "repo_summaries": _data_store["repo_summaries"],
-        "pr_metrics": _data_store["pr_metrics"],
-        "bottlenecks": _data_store["bottlenecks"],
+        "raw_prs": raw_prs,
+        "repo_summaries": repo_summaries,
+        "pr_metrics": pr_metrics,
+        "bottlenecks": bottlenecks,
     }
+    data_store_update(cache_payload)
     save_cache(cache_payload, CACHE_PATH)
     logger.info("Purged repo '%s' from data store and cache.", repo_name)
 
@@ -550,7 +556,7 @@ def api_repo_purge(repo_name: str):
 @app.route("/api/pr/<repo_name>/<int:pr_number>")
 def api_pr(repo_name: str, pr_number: int):
     """Return full details for a single PR including metrics and bottlenecks."""
-    if not _data_store["loaded"]:
+    if not data_store_loaded():
         return (
             jsonify(
                 {
@@ -562,7 +568,7 @@ def api_pr(repo_name: str, pr_number: int):
         )
 
     # Search computed PR metrics first
-    pr_metrics_list = _data_store["pr_metrics"].get(repo_name, [])
+    pr_metrics_list = data_store_get("pr_metrics", {}).get(repo_name, [])
     pr_data = next(
         (p for p in pr_metrics_list if p.get("number") == pr_number), None
     )
@@ -579,7 +585,7 @@ def api_pr(repo_name: str, pr_number: int):
     # Attach bottleneck flags for this PR
     pr_bottlenecks = [
         b
-        for b in _data_store["bottlenecks"]
+        for b in data_store_get("bottlenecks", [])
         if b.get("repo") == repo_name and b.get("pr_number") == pr_number
     ]
     pr_data_with_bottlenecks = {**pr_data, "bottlenecks": pr_bottlenecks}
@@ -597,7 +603,7 @@ def api_bottlenecks():
         type  - filter to a specific bottleneck type
         severity - filter by severity level (e.g. 'high', 'medium', 'low')
     """
-    if not _data_store["loaded"]:
+    if not data_store_loaded():
         return (
             jsonify(
                 {
@@ -608,7 +614,7 @@ def api_bottlenecks():
             400,
         )
 
-    bottlenecks = list(_data_store["bottlenecks"])
+    bottlenecks = list(data_store_get("bottlenecks", []))
 
     # Apply optional filters
     repo_filter = request.args.get("repo")

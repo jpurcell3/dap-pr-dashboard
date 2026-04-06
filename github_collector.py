@@ -143,7 +143,12 @@ def _build_headers(token: str | None = None) -> dict[str, str]:
 # Rate-limit helpers
 # ---------------------------------------------------------------------------
 
-# Shared rate-limit state accessible from other modules (e.g. app.py)
+# Shared rate-limit state accessible from other modules (e.g. app.py).
+# When REDIS_URL is set, reads/writes go through Redis; otherwise in-memory.
+from redis_state import rate_limit_set, rate_limit_get, rate_limit_bulk_set
+
+# Keep the dict around as an importable alias for backward compat (read-only
+# snapshot used only by app.py's old import; app.py no longer imports this).
 rate_limit_info: dict = {
     "remaining": None,
     "limit": None,
@@ -164,10 +169,12 @@ def _check_rate_limit(response: requests.Response) -> None:
         return
 
     remaining = int(remaining)
-    rate_limit_info["remaining"] = remaining
-    rate_limit_info["limit"] = int(limit) if limit else None
-    rate_limit_info["used"] = int(used) if used else None
-    rate_limit_info["reset_at"] = int(reset_at) if reset_at else None
+    rate_limit_bulk_set({
+        "remaining": remaining,
+        "limit": int(limit) if limit else None,
+        "used": int(used) if used else None,
+        "reset_at": int(reset_at) if reset_at else None,
+    })
 
     # Log every 50 requests or when getting low
     if remaining % 50 == 0 or remaining <= 100:
@@ -186,8 +193,10 @@ def _check_rate_limit(response: requests.Response) -> None:
             sleep_seconds = 60
             reset_time = "~1 minute"
 
-        rate_limit_info["is_throttled"] = True
-        rate_limit_info["throttled_until"] = reset_time
+        rate_limit_bulk_set({
+            "is_throttled": True,
+            "throttled_until": reset_time,
+        })
 
         logger.warning(
             "Rate limit nearly exhausted (%d remaining). "
@@ -197,8 +206,10 @@ def _check_rate_limit(response: requests.Response) -> None:
             reset_time,
         )
         time.sleep(sleep_seconds)
-        rate_limit_info["is_throttled"] = False
-        rate_limit_info["throttled_until"] = None
+        rate_limit_bulk_set({
+            "is_throttled": False,
+            "throttled_until": None,
+        })
 
 
 def _get_paginated(url: str, headers: dict, params: dict | None = None,

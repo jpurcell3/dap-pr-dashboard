@@ -8,6 +8,7 @@ services:
       - CACHE_PATH=/data/pr_cache.json
       - LOG_TO_STDOUT=true
       - REDIS_URL=redis://redis:6379/0
+      # - AUTO_REFRESH_INTERVAL_MINUTES=60   # uncomment for hourly auto-sync
     volumes:
       - .:/app                       # bind mount: local edits sync instantly
       - cache_data:/data             # persistent cache (separate from local pr_cache.json)

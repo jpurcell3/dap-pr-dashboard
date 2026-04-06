@@ -78,6 +78,11 @@ CACHE_PATH = os.environ.get(
     os.path.join(os.path.dirname(__file__), "pr_cache.json"),
 )
 
+# Auto-refresh interval in minutes.  0 (default) = disabled.
+AUTO_REFRESH_INTERVAL_MINUTES = int(
+    os.environ.get("AUTO_REFRESH_INTERVAL_MINUTES", "0")
+)
+
 
 # ---------------------------------------------------------------------------
 # CORS
@@ -742,6 +747,17 @@ def api_health():
         "is_throttled": rl.get("is_throttled", False),
     }
 
+    # --- Auto-refresh ---
+    checks["auto_refresh"] = {
+        "enabled": AUTO_REFRESH_INTERVAL_MINUTES > 0,
+        "interval_minutes": AUTO_REFRESH_INTERVAL_MINUTES or None,
+        "last_run": (
+            datetime.fromtimestamp(_auto_refresh_last_run, tz=timezone.utc).isoformat()
+            if _auto_refresh_last_run else None
+        ),
+        "last_result": _auto_refresh_last_result,
+    }
+
     status_code = 200 if healthy else 503
     return jsonify({"status": "healthy" if healthy else "degraded", "checks": checks}), status_code
 
@@ -751,6 +767,68 @@ def api_health():
 # ---------------------------------------------------------------------------
 # Load cache into memory when the module is first imported / the app starts.
 _load_cache_into_store()
+
+
+# ---------------------------------------------------------------------------
+# Scheduled auto-refresh
+# ---------------------------------------------------------------------------
+_auto_refresh_last_run: float | None = None
+_auto_refresh_last_result: str = "never"
+
+
+def _auto_refresh_loop():
+    """Daemon thread: periodically trigger a full refresh.
+
+    Each worker process spawns this thread.  Because _do_refresh uses
+    acquire_refresh_lock(), only one worker will actually perform the
+    refresh at any given time — the others silently skip.
+    """
+    global _auto_refresh_last_run, _auto_refresh_last_result
+    interval_secs = AUTO_REFRESH_INTERVAL_MINUTES * 60
+
+    # Wait the full interval before the first auto-refresh so a manual
+    # sync on startup isn't duplicated.
+    logger.info(
+        "Auto-refresh enabled: every %d minutes (pid=%d).",
+        AUTO_REFRESH_INTERVAL_MINUTES,
+        os.getpid(),
+    )
+    time.sleep(interval_secs)
+
+    while True:
+        try:
+            if refresh_status_get("running"):
+                logger.info("Auto-refresh skipped: refresh already running.")
+                _auto_refresh_last_result = "skipped (already running)"
+            elif not acquire_refresh_lock():
+                logger.info("Auto-refresh skipped: another worker holds the lock.")
+                _auto_refresh_last_result = "skipped (lock held)"
+            else:
+                logger.info("Auto-refresh starting (pid=%d).", os.getpid())
+                _auto_refresh_last_result = "running"
+                # Compute the 'since' date using the default lookback
+                since = None
+                if DEFAULT_PR_LOOKBACK_DAYS > 0:
+                    since = (
+                        datetime.now(timezone.utc)
+                        - timedelta(days=DEFAULT_PR_LOOKBACK_DAYS)
+                    ).strftime("%Y-%m-%d")
+                _do_refresh(repos=None, since=since, until=None)
+                _auto_refresh_last_result = "completed"
+            _auto_refresh_last_run = time.time()
+        except Exception:
+            logger.exception("Auto-refresh loop error")
+            _auto_refresh_last_result = "error"
+            _auto_refresh_last_run = time.time()
+
+        time.sleep(interval_secs)
+
+
+if AUTO_REFRESH_INTERVAL_MINUTES > 0:
+    _auto_refresh_thread = threading.Thread(
+        target=_auto_refresh_loop, daemon=True, name="auto-refresh",
+    )
+    _auto_refresh_thread.start()
 
 
 if __name__ == "__main__":

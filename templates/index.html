@@ -1819,6 +1819,40 @@
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
 
+    /**
+     * Derive a high-level group from a CI check name.
+     * GitHub Actions names typically look like "Build / compile-arm64" or
+     * "Build images / node-18-slim".  We take the prefix before the first
+     * " / " separator as the group.  If there's no separator we try common
+     * keyword prefixes; otherwise the full name is its own group.
+     */
+    function groupCheckName(name) {
+        if (!name) return 'Other';
+        // GitHub Actions matrix format: "Job Name / variant"
+        const slashIdx = name.indexOf(' / ');
+        if (slashIdx > 0) return name.substring(0, slashIdx).trim();
+        // Fallback: cluster by well-known prefixes
+        const lower = name.toLowerCase();
+        const prefixes = ['build', 'test', 'lint', 'deploy', 'scan', 'security', 'analyze', 'publish', 'release', 'validate', 'check'];
+        for (const p of prefixes) {
+            if (lower.startsWith(p)) {
+                // Return with original casing of the first word
+                return name.substring(0, p.length);
+            }
+        }
+        return name;
+    }
+
+    /**
+     * Group an array of check names into their parent groups.
+     * Returns a Set of unique group names.
+     */
+    function groupCheckNames(names) {
+        const groups = new Set();
+        (names || []).forEach(n => groups.add(groupCheckName(n)));
+        return groups;
+    }
+
     async function loadAllPrsView() {
         const container = document.getElementById('allPrsContent');
         if (!container) return;
@@ -1854,31 +1888,62 @@
 
     /** Core render for the All PRs tab */
     function renderAllPrsView(container, allPrs) {
-        // Determine which PRs to display
-        const failedPrs = allPrs
-            .filter(p => (p.failed_checks || []).length > 0)
-            .sort((a, b) => (b.failed_checks || []).length - (a.failed_checks || []).length);
-        const displayPrs = _allPrsShowAll ? allPrs : failedPrs;
+        // --- Grouped failure data ------------------------------------------------
+        // Map each PR's failed_checks to grouped names
+        const prsWithGroupedFailures = allPrs.map(pr => {
+            const groupedFailed = [...groupCheckNames(pr.failed_checks || [])];
+            return { ...pr, _groupedFailed: groupedFailed };
+        });
 
-        // Build failure-count map by check name (for pie chart – always based on failures)
-        const failureByCheck = {};
-        allPrs.forEach(pr => {
-            (pr.failed_checks || []).forEach(name => {
-                failureByCheck[name] = (failureByCheck[name] || 0) + 1;
+        // Determine which PRs to display
+        const failedPrs = prsWithGroupedFailures
+            .filter(p => p._groupedFailed.length > 0)
+            .sort((a, b) => b._groupedFailed.length - a._groupedFailed.length);
+        const displayPrs = _allPrsShowAll ? prsWithGroupedFailures : failedPrs;
+
+        // Failure counts by GROUP for pie chart
+        const failureByGroup = {};
+        prsWithGroupedFailures.forEach(pr => {
+            pr._groupedFailed.forEach(g => {
+                failureByGroup[g] = (failureByGroup[g] || 0) + 1;
             });
         });
-        const pieLabels = Object.keys(failureByCheck).sort((a, b) => failureByCheck[b] - failureByCheck[a]);
-        const pieCounts = pieLabels.map(n => failureByCheck[n]);
+        const pieLabels = Object.keys(failureByGroup).sort((a, b) => failureByGroup[b] - failureByGroup[a]);
+        const pieCounts = pieLabels.map(g => failureByGroup[g]);
 
-        // Distinct check names for the filter dropdown
-        const allCheckNames = new Set();
-        allPrs.forEach(pr => (pr.check_names || []).forEach(n => allCheckNames.add(n)));
-        const checkNamesSorted = [...allCheckNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        // Build group -> [child check names] mapping for the organized dropdown
+        const groupToChecks = {};
+        allPrs.forEach(pr => {
+            (pr.check_names || []).forEach(name => {
+                const g = groupCheckName(name);
+                if (!groupToChecks[g]) groupToChecks[g] = new Set();
+                groupToChecks[g].add(name);
+            });
+        });
+        const sortedGroups = Object.keys(groupToChecks).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        // Build dropdown HTML with optgroups
+        let dropdownHtml = '<option value="">All Check Groups</option>';
+        sortedGroups.forEach(g => {
+            const children = [...groupToChecks[g]].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            if (children.length === 1 && children[0] === g) {
+                // Single check that IS its own group – flat option
+                dropdownHtml += `<option value="${esc(g)}">${esc(g)}</option>`;
+            } else {
+                // Group header is selectable, children indented below
+                dropdownHtml += `<optgroup label="${esc(g)}">`;
+                dropdownHtml += `<option value="group:${esc(g)}" style="font-weight:600;">${esc(g)} (all)</option>`;
+                children.forEach(c => {
+                    dropdownHtml += `<option value="${esc(c)}">&nbsp;&nbsp;${esc(c)}</option>`;
+                });
+                dropdownHtml += '</optgroup>';
+            }
+        });
 
         // Summary stats
         const totalFailed = failedPrs.length;
         const totalFailures = pieCounts.reduce((s, v) => s + v, 0);
-        const worstCheck = pieLabels[0] || '--';
+        const worstGroup = pieLabels[0] || '--';
         const worstCount = pieCounts[0] || 0;
 
         // Palette for pie slices
@@ -1927,13 +1992,13 @@
                 <div class="col-sm-6 col-md-3">
                     <div class="section-card text-center py-3">
                         <div class="stat-value text-warning" data-count-to="${totalFailures}">0</div>
-                        <div class="stat-label">Total Failures</div>
+                        <div class="stat-label">Total Failure Groups</div>
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-3">
                     <div class="section-card text-center py-3">
-                        <div class="stat-value text-danger" style="font-size:1.1rem;" title="${esc(worstCheck)}">${esc(truncate(worstCheck, 18))}</div>
-                        <div class="stat-label">Most Failed Check <span class="text-danger">(${worstCount})</span></div>
+                        <div class="stat-value text-danger" style="font-size:1.1rem;" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 18))}</div>
+                        <div class="stat-label">Top Failing Group <span class="text-danger">(${worstCount})</span></div>
                     </div>
                 </div>
             </div>
@@ -1944,7 +2009,7 @@
                 ${pieLabels.length > 0 ? `
                 <div class="col-lg-4">
                     <div class="section-card h-100">
-                        <h6 class="text-muted mb-2"><i class="bi bi-pie-chart-fill me-1"></i>Failures by Check Name</h6>
+                        <h6 class="text-muted mb-2"><i class="bi bi-pie-chart-fill me-1"></i>Failures by Check Group</h6>
                         <div style="position:relative; max-height:360px;">
                             <canvas id="chartFailurePie"></canvas>
                         </div>
@@ -1954,13 +2019,12 @@
                 <!-- Table column -->
                 <div class="${pieLabels.length > 0 ? 'col-lg-8' : 'col-12'}">
                     <div class="section-card">
-                        <!-- Check name filter -->
+                        <!-- Check group filter -->
                         <div class="d-flex gap-2 align-items-end mb-2 flex-wrap">
-                            <div style="min-width:200px;">
-                                <label class="form-label text-muted small mb-0">Filter by Check Name</label>
+                            <div style="min-width:240px;">
+                                <label class="form-label text-muted small mb-0">Filter by Check Group</label>
                                 <select class="form-select form-select-sm" id="filterCheckName" onchange="applyAllPrsCheckFilter()">
-                                    <option value="">All Checks</option>
-                                    ${checkNamesSorted.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+                                    ${dropdownHtml}
                                 </select>
                             </div>
                             ${_allPrsShowAll ? `
@@ -1987,14 +2051,14 @@
                                         <th>Title</th>
                                         <th>Author</th>
                                         <th>State</th>
-                                        <th>Failed Checks</th>
-                                        <th># Failures</th>
+                                        <th>Failed Groups</th>
+                                        <th># Groups</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${displayPrs.map((pr, idx) => {
-                                        const fc = pr.failed_checks || [];
-                                        const failedStr = fc.join(', ');
+                                        const gf = pr._groupedFailed || [];
+                                        const gfStr = gf.join(', ');
                                         return `
                                     <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')" data-pr-idx="${idx}">
                                         <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
@@ -2003,13 +2067,13 @@
                                         <td>${esc(pr.author || '')}</td>
                                         <td>${stateBadge(pr.state)}</td>
                                         <td>
-                                            ${fc.length > 0
-                                                ? `<span class="text-danger" style="font-size:0.8rem;" title="${esc(failedStr)}">${esc(truncate(failedStr, 45))}</span>`
+                                            ${gf.length > 0
+                                                ? `<span class="text-danger" style="font-size:0.8rem;" title="${esc(gfStr)}">${esc(truncate(gfStr, 45))}</span>`
                                                 : '<span class="text-success" style="font-size:0.8rem;"><i class="bi bi-check-circle-fill me-1"></i>All passed</span>'}
                                         </td>
-                                        <td data-order="${fc.length}">
-                                            ${fc.length > 0
-                                                ? `<span class="badge bg-danger">${fc.length}</span>`
+                                        <td data-order="${gf.length}">
+                                            ${gf.length > 0
+                                                ? `<span class="badge bg-danger">${gf.length}</span>`
                                                 : '<span class="text-muted">0</span>'}
                                         </td>
                                     </tr>`;
@@ -2052,7 +2116,7 @@
                                 label: ctx => {
                                     const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
                                     const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
-                                    return `${ctx.label}: ${ctx.parsed} failures (${pct}%)`;
+                                    return `${ctx.label}: ${ctx.parsed} PRs (${pct}%)`;
                                 },
                             },
                         },
@@ -2070,7 +2134,7 @@
 
         state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
             pageLength: 25,
-            order: [[6, 'desc']],  // sort by # Failures descending
+            order: [[6, 'desc']],  // sort by # Groups descending
             language: { search: '', searchPlaceholder: 'Search PRs...' },
             dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
                  "<'row'<'col-sm-12'tr>>" +
@@ -2081,17 +2145,16 @@
         animateAllCounters(container);
     }
 
-    /** Custom DataTables filter function for check name/result filters */
+    /** Custom DataTables filter function for check group/name filters */
     function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
         if (settings.nTable.id !== 'tableAllPrs') return true;
 
-        const checkName = (document.getElementById('filterCheckName')?.value || '').trim();
+        const filterVal = (document.getElementById('filterCheckName')?.value || '').trim();
         const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
-        if (!checkName && !checkResult) return true;
+        if (!filterVal && !checkResult) return true;
 
         const row = settings.aoData[dataIndex]?.nTr;
         const idx = row ? parseInt(row.dataset.prIdx, 10) : -1;
-        // displayPrs is the currently-rendered subset; look up from _allPrsData based on view mode
         const displayPrs = _allPrsShowAll
             ? _allPrsData
             : _allPrsData.filter(p => (p.failed_checks || []).length > 0)
@@ -2102,19 +2165,37 @@
         const prCheckNames = pr.check_names || [];
         const prFailedChecks = pr.failed_checks || [];
 
-        if (checkName && checkResult === 'failed') return prFailedChecks.includes(checkName);
-        if (checkName && checkResult === 'passed') return prCheckNames.includes(checkName) && !prFailedChecks.includes(checkName);
-        if (checkName) {
-            // In failures-only mode, filter to PRs where this check specifically failed
-            if (!_allPrsShowAll) return prFailedChecks.includes(checkName);
-            return prCheckNames.includes(checkName);
+        // Determine if filtering by group or individual check
+        const isGroupFilter = filterVal.startsWith('group:');
+        const groupName = isGroupFilter ? filterVal.substring(6) : '';
+
+        // Resolve which raw check names match the filter
+        let matchesFilter;
+        if (isGroupFilter) {
+            // Match any check whose group equals groupName
+            matchesFilter = (names) => names.some(n => groupCheckName(n) === groupName);
+            var matchesFailed = (names) => names.some(n => groupCheckName(n) === groupName);
+        } else if (filterVal) {
+            // Exact individual check name match
+            matchesFilter = (names) => names.includes(filterVal);
+            var matchesFailed = matchesFilter;
+        } else {
+            matchesFilter = () => true;
+            var matchesFailed = () => true;
+        }
+
+        if (filterVal && checkResult === 'failed') return matchesFailed(prFailedChecks);
+        if (filterVal && checkResult === 'passed') return matchesFilter(prCheckNames) && !matchesFailed(prFailedChecks);
+        if (filterVal) {
+            if (!_allPrsShowAll) return matchesFailed(prFailedChecks);
+            return matchesFilter(prCheckNames);
         }
         if (checkResult === 'failed') return prFailedChecks.length > 0;
         if (checkResult === 'passed') return prCheckNames.length > 0 && prFailedChecks.length === 0;
         return true;
     }
 
-    /** Apply the check name/result filters and redraw the table */
+    /** Apply the check group/name filters and redraw the table */
     function applyAllPrsCheckFilter() {
         const dt = state.dataTables['tableAllPrs'];
         if (dt) {
@@ -2122,9 +2203,9 @@
             const info = dt.page.info();
             const countEl = document.getElementById('allPrsFilterCount');
             if (countEl) {
-                const checkName = document.getElementById('filterCheckName')?.value;
+                const filterVal = document.getElementById('filterCheckName')?.value;
                 const checkResult = document.getElementById('filterCheckResult')?.value;
-                if (checkName || checkResult) {
+                if (filterVal || checkResult) {
                     countEl.textContent = `Showing ${info.recordsDisplay} of ${info.recordsTotal}`;
                 } else {
                     countEl.textContent = '';

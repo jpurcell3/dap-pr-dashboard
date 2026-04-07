@@ -1814,9 +1814,10 @@
     }
 
     // ---------------------------------------------------------------------------
-    // All PRs View (dedicated tab with check-status chart + table)
+    // All PRs View (dedicated tab – defaults to failures-only with pie chart)
     // ---------------------------------------------------------------------------
-    let _allPrsData = [];  // raw data from /api/prs for custom filtering
+    let _allPrsData = [];      // raw data from /api/prs
+    let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
 
     async function loadAllPrsView() {
         const container = document.getElementById('allPrsContent');
@@ -1824,252 +1825,13 @@
         container.innerHTML = `
             <div class="section-loading">
                 <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                <p class="mt-2">Loading all pull requests...</p>
+                <p class="mt-2">Loading pull requests...</p>
             </div>`;
 
         try {
             const prs = await apiFetch('/api/prs?limit=500');
             _allPrsData = prs;
-
-            // Collect all distinct check names across all PRs
-            const allCheckNames = new Set();
-            prs.forEach(pr => (pr.check_names || []).forEach(n => allCheckNames.add(n)));
-            const checkNamesSorted = [...allCheckNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-
-            // Build check-status chart data: per check name, count passed vs failed
-            const checkStats = {};
-            checkNamesSorted.forEach(name => { checkStats[name] = { passed: 0, failed: 0 }; });
-            prs.forEach(pr => {
-                const names = pr.check_names || [];
-                const failed = pr.failed_checks || [];
-                names.forEach(name => {
-                    if (!checkStats[name]) checkStats[name] = { passed: 0, failed: 0 };
-                    if (failed.includes(name)) {
-                        checkStats[name].failed++;
-                    } else {
-                        checkStats[name].passed++;
-                    }
-                });
-            });
-            const chartLabels = Object.keys(checkStats);
-            const chartPassed = chartLabels.map(n => checkStats[n].passed);
-            const chartFailed = chartLabels.map(n => checkStats[n].failed);
-
-            // Summary stats
-            const openCount = prs.filter(p => p.state === 'open').length;
-            const mergedCount = prs.filter(p => p.state === 'merged').length;
-            const closedCount = prs.filter(p => p.state === 'closed').length;
-            const failedPrs = prs.filter(p => (p.failed_checks || []).length > 0).length;
-
-            container.innerHTML = `
-                <h4 class="mb-3"><i class="bi bi-code-square me-2"></i>All Pull Requests <span class="text-muted" style="font-size:0.85rem;">(${prs.length})</span></h4>
-
-                <!-- Summary cards row -->
-                <div class="row g-3 mb-3">
-                    <div class="col-sm-6 col-md-3">
-                        <div class="section-card text-center py-3">
-                            <div class="stat-value text-info" data-count-to="${prs.length}">0</div>
-                            <div class="stat-label">Total PRs</div>
-                        </div>
-                    </div>
-                    <div class="col-sm-6 col-md-3">
-                        <div class="section-card text-center py-3">
-                            <div class="stat-value text-success" data-count-to="${openCount}">0</div>
-                            <div class="stat-label">Open</div>
-                        </div>
-                    </div>
-                    <div class="col-sm-6 col-md-3">
-                        <div class="section-card text-center py-3">
-                            <div class="stat-value" style="color:#a371f7;" data-count-to="${mergedCount}">0</div>
-                            <div class="stat-label">Merged</div>
-                        </div>
-                    </div>
-                    <div class="col-sm-6 col-md-3">
-                        <div class="section-card text-center py-3">
-                            <div class="stat-value text-danger" data-count-to="${failedPrs}">0</div>
-                            <div class="stat-label">With Failed Checks</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Check status chart -->
-                ${chartLabels.length > 0 ? `
-                <div class="section-card mb-3">
-                    <h6 class="text-muted mb-2"><i class="bi bi-bar-chart-steps me-1"></i>CI/CD Check Results by Check Name</h6>
-                    <div style="position:relative; height:${Math.max(220, chartLabels.length * 28 + 60)}px;">
-                        <canvas id="chartCheckBreakdown"></canvas>
-                    </div>
-                </div>` : ''}
-
-                <!-- State filters -->
-                <div class="d-flex gap-2 mb-2" id="allPrStateFilters">
-                    <button class="btn btn-sm btn-outline-light active" data-state="all">All</button>
-                    <button class="btn btn-sm btn-outline-success" data-state="open"><i class="bi bi-record-circle me-1"></i>Open</button>
-                    <button class="btn btn-sm btn-outline-info" data-state="merged"><i class="bi bi-git me-1"></i>Merged</button>
-                    <button class="btn btn-sm btn-outline-secondary" data-state="closed"><i class="bi bi-x-circle me-1"></i>Closed</button>
-                </div>
-
-                <!-- Check filters -->
-                <div class="section-card filter-bar-wrap mb-2" style="padding: 0.5rem 0.8rem;">
-                    <div class="row g-2 filter-bar align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label text-muted small mb-0">Check Name</label>
-                            <select class="form-select" id="filterCheckName" onchange="applyAllPrsCheckFilter()">
-                                <option value="">All Checks</option>
-                                ${checkNamesSorted.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label text-muted small mb-0">Check Result</label>
-                            <select class="form-select" id="filterCheckResult" onchange="applyAllPrsCheckFilter()">
-                                <option value="">Any</option>
-                                <option value="failed">Failed</option>
-                                <option value="passed">Passed</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearAllPrsCheckFilter()">
-                                <i class="bi bi-x-circle me-1"></i>Clear
-                            </button>
-                        </div>
-                        <div class="col-md-3 text-end">
-                            <small class="text-muted" id="allPrsFilterCount"></small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="table-responsive">
-                    <table id="tableAllPrs" class="table table-dark-custom table-hover w-100">
-                        <thead>
-                            <tr>
-                                <th>Repo</th>
-                                <th>PR #</th>
-                                <th>Title</th>
-                                <th>Author</th>
-                                <th>State</th>
-                                <th>Created</th>
-                                <th>Cycle Time</th>
-                                <th>Checks</th>
-                                <th>Bottlenecks</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${prs.map((pr, idx) => {
-                                const chkState = pr.checks_overall || 'unknown';
-                                const chkClass = chkState === 'success' ? 'text-success' : chkState === 'failure' ? 'text-danger' : chkState === 'pending' ? 'text-warning' : 'text-muted';
-                                const chkIcon = chkState === 'success' ? 'bi-check-circle-fill' : chkState === 'failure' ? 'bi-x-circle-fill' : chkState === 'pending' ? 'bi-clock' : '';
-                                const failedStr = (pr.failed_checks || []).join(', ');
-                                return `
-                                <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')" data-pr-idx="${idx}">
-                                    <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
-                                    <td><span class="text-info fw-bold">#${pr.number}</span></td>
-                                    <td title="${esc(pr.title)}">${esc(truncate(pr.title, 45))}</td>
-                                    <td>${esc(pr.author || '')}</td>
-                                    <td>${stateBadge(pr.state)}</td>
-                                    <td>${fmtDateShort(pr.created_at)}</td>
-                                    <td data-order="${pr.total_cycle_time_hours || 0}">
-                                        <span class="${cycleClass(pr.total_cycle_time_hours)}">${fmtDuration(pr.total_cycle_time_hours)}</span>
-                                    </td>
-                                    <td>
-                                        ${chkIcon ? `<i class="bi ${chkIcon} ${chkClass} me-1"></i>` : ''}
-                                        <span class="${chkClass}" style="font-size:0.8rem;">${chkState}</span>
-                                        ${failedStr ? `<div class="text-danger" style="font-size:0.72rem; margin-top:1px;">${esc(truncate(failedStr, 40))}</div>` : ''}
-                                    </td>
-                                    <td>${pr.bottleneck_count > 0
-                                        ? `<span class="badge bg-warning text-dark">${pr.bottleneck_count}</span>`
-                                        : '<span class="text-muted">--</span>'}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>`;
-
-            // Build check-status stacked bar chart
-            if (chartLabels.length > 0) {
-                destroyChart('chartCheckBreakdown');
-                const ctxCheck = document.getElementById('chartCheckBreakdown').getContext('2d');
-                const defaults = chartDefaults();
-                state.charts['chartCheckBreakdown'] = new Chart(ctxCheck, {
-                    type: 'bar',
-                    data: {
-                        labels: chartLabels,
-                        datasets: [
-                            {
-                                label: 'Passed',
-                                data: chartPassed,
-                                backgroundColor: 'rgba(63, 185, 80, 0.8)',
-                                borderColor: 'rgba(63, 185, 80, 1)',
-                                borderWidth: 1,
-                                borderRadius: 2,
-                            },
-                            {
-                                label: 'Failed',
-                                data: chartFailed,
-                                backgroundColor: 'rgba(248, 81, 73, 0.8)',
-                                borderColor: 'rgba(248, 81, 73, 1)',
-                                borderWidth: 1,
-                                borderRadius: 2,
-                            },
-                        ],
-                    },
-                    options: {
-                        ...defaults,
-                        indexAxis: 'y',
-                        plugins: {
-                            ...defaults.plugins,
-                            legend: { display: true, position: 'top', labels: { color: '#8b949e', boxWidth: 14, padding: 16 } },
-                            tooltip: {
-                                ...defaults.plugins.tooltip,
-                                callbacks: {
-                                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x} PRs`,
-                                },
-                            },
-                        },
-                        scales: {
-                            x: {
-                                ...defaults.scales.x,
-                                stacked: true,
-                                title: { display: true, text: 'PR Count', color: '#8b949e' },
-                            },
-                            y: {
-                                ...defaults.scales.y,
-                                stacked: true,
-                                ticks: { ...defaults.scales.y.ticks, font: { size: 11 } },
-                            },
-                        },
-                    },
-                });
-            }
-
-            // Initialize DataTable
-            destroyTable('tableAllPrs');
-
-            // Custom DataTables search for check filters (operates on hidden data attributes)
-            $.fn.dataTable.ext.search.push(_allPrsCheckFilterFn);
-
-            state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
-                pageLength: 25,
-                order: [[5, 'desc']],
-                language: { search: '', searchPlaceholder: 'Search all PRs...' },
-                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
-                     "<'row'<'col-sm-12'tr>>" +
-                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
-            });
-
-            // State filter buttons
-            document.querySelectorAll('#allPrStateFilters button').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('#allPrStateFilters button').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const st = btn.dataset.state;
-                    const dt = state.dataTables['tableAllPrs'];
-                    if (dt) dt.column(4).search(st === 'all' ? '' : st, true, false).draw();
-                });
-            });
-
-            // Animate stat counters
-            animateAllCounters(container);
-
+            renderAllPrsView(container, prs);
         } catch (err) {
             container.innerHTML = `
                 <div class="section-card text-center py-5">
@@ -2083,44 +1845,272 @@
         }
     }
 
+    /** Toggle between failures-only and all-PRs view */
+    function toggleAllPrsMode() {
+        _allPrsShowAll = !_allPrsShowAll;
+        const container = document.getElementById('allPrsContent');
+        if (container && _allPrsData.length) renderAllPrsView(container, _allPrsData);
+    }
+
+    /** Core render for the All PRs tab */
+    function renderAllPrsView(container, allPrs) {
+        // Determine which PRs to display
+        const failedPrs = allPrs
+            .filter(p => (p.failed_checks || []).length > 0)
+            .sort((a, b) => (b.failed_checks || []).length - (a.failed_checks || []).length);
+        const displayPrs = _allPrsShowAll ? allPrs : failedPrs;
+
+        // Build failure-count map by check name (for pie chart – always based on failures)
+        const failureByCheck = {};
+        allPrs.forEach(pr => {
+            (pr.failed_checks || []).forEach(name => {
+                failureByCheck[name] = (failureByCheck[name] || 0) + 1;
+            });
+        });
+        const pieLabels = Object.keys(failureByCheck).sort((a, b) => failureByCheck[b] - failureByCheck[a]);
+        const pieCounts = pieLabels.map(n => failureByCheck[n]);
+
+        // Distinct check names for the filter dropdown
+        const allCheckNames = new Set();
+        allPrs.forEach(pr => (pr.check_names || []).forEach(n => allCheckNames.add(n)));
+        const checkNamesSorted = [...allCheckNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        // Summary stats
+        const totalFailed = failedPrs.length;
+        const totalFailures = pieCounts.reduce((s, v) => s + v, 0);
+        const worstCheck = pieLabels[0] || '--';
+        const worstCount = pieCounts[0] || 0;
+
+        // Palette for pie slices
+        const pieColors = [
+            'rgba(248, 81, 73, 0.85)',
+            'rgba(255, 166, 87, 0.85)',
+            'rgba(210, 153, 235, 0.85)',
+            'rgba(121, 192, 255, 0.85)',
+            'rgba(63, 185, 80, 0.85)',
+            'rgba(255, 203, 107, 0.85)',
+            'rgba(149, 157, 165, 0.85)',
+            'rgba(56, 211, 159, 0.85)',
+            'rgba(219, 107, 142, 0.85)',
+            'rgba(110, 135, 206, 0.85)',
+        ];
+
+        const viewLabel = _allPrsShowAll ? 'All Pull Requests' : 'PRs with Failed Checks';
+        const toggleLabel = _allPrsShowAll ? 'Show Failures Only' : 'View All PRs';
+        const toggleIcon = _allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul';
+
+        container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">
+                    <i class="bi ${_allPrsShowAll ? 'bi-code-square' : 'bi-x-circle-fill text-danger'} me-2"></i>${viewLabel}
+                    <span class="text-muted" style="font-size:0.85rem;">(${displayPrs.length})</span>
+                </h4>
+                <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
+                    <i class="bi ${toggleIcon} me-1"></i>${toggleLabel}
+                </button>
+            </div>
+
+            <!-- Summary cards row -->
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-md-3">
+                    <div class="section-card text-center py-3">
+                        <div class="stat-value text-info" data-count-to="${allPrs.length}">0</div>
+                        <div class="stat-label">Total PRs</div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="section-card text-center py-3">
+                        <div class="stat-value text-danger" data-count-to="${totalFailed}">0</div>
+                        <div class="stat-label">PRs with Failures</div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="section-card text-center py-3">
+                        <div class="stat-value text-warning" data-count-to="${totalFailures}">0</div>
+                        <div class="stat-label">Total Failures</div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="section-card text-center py-3">
+                        <div class="stat-value text-danger" style="font-size:1.1rem;" title="${esc(worstCheck)}">${esc(truncate(worstCheck, 18))}</div>
+                        <div class="stat-label">Most Failed Check <span class="text-danger">(${worstCount})</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pie chart + Table side by side -->
+            <div class="row g-3 mb-3">
+                <!-- Pie chart column -->
+                ${pieLabels.length > 0 ? `
+                <div class="col-lg-4">
+                    <div class="section-card h-100">
+                        <h6 class="text-muted mb-2"><i class="bi bi-pie-chart-fill me-1"></i>Failures by Check Name</h6>
+                        <div style="position:relative; max-height:360px;">
+                            <canvas id="chartFailurePie"></canvas>
+                        </div>
+                    </div>
+                </div>` : ''}
+
+                <!-- Table column -->
+                <div class="${pieLabels.length > 0 ? 'col-lg-8' : 'col-12'}">
+                    <div class="section-card">
+                        <!-- Check name filter -->
+                        <div class="d-flex gap-2 align-items-end mb-2 flex-wrap">
+                            <div style="min-width:200px;">
+                                <label class="form-label text-muted small mb-0">Filter by Check Name</label>
+                                <select class="form-select form-select-sm" id="filterCheckName" onchange="applyAllPrsCheckFilter()">
+                                    <option value="">All Checks</option>
+                                    ${checkNamesSorted.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+                                </select>
+                            </div>
+                            ${_allPrsShowAll ? `
+                            <div style="min-width:140px;">
+                                <label class="form-label text-muted small mb-0">Check Result</label>
+                                <select class="form-select form-select-sm" id="filterCheckResult" onchange="applyAllPrsCheckFilter()">
+                                    <option value="">Any</option>
+                                    <option value="failed">Failed</option>
+                                    <option value="passed">Passed</option>
+                                </select>
+                            </div>` : ''}
+                            <button class="btn btn-outline-secondary btn-sm" onclick="clearAllPrsCheckFilter()" style="height:31px;">
+                                <i class="bi bi-x-circle me-1"></i>Clear
+                            </button>
+                            <small class="text-muted ms-auto" id="allPrsFilterCount"></small>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table id="tableAllPrs" class="table table-dark-custom table-hover w-100">
+                                <thead>
+                                    <tr>
+                                        <th>Repo</th>
+                                        <th>PR #</th>
+                                        <th>Title</th>
+                                        <th>Author</th>
+                                        <th>State</th>
+                                        <th>Failed Checks</th>
+                                        <th># Failures</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${displayPrs.map((pr, idx) => {
+                                        const fc = pr.failed_checks || [];
+                                        const failedStr = fc.join(', ');
+                                        return `
+                                    <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')" data-pr-idx="${idx}">
+                                        <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
+                                        <td><span class="text-info fw-bold">#${pr.number}</span></td>
+                                        <td title="${esc(pr.title)}">${esc(truncate(pr.title, 40))}</td>
+                                        <td>${esc(pr.author || '')}</td>
+                                        <td>${stateBadge(pr.state)}</td>
+                                        <td>
+                                            ${fc.length > 0
+                                                ? `<span class="text-danger" style="font-size:0.8rem;" title="${esc(failedStr)}">${esc(truncate(failedStr, 45))}</span>`
+                                                : '<span class="text-success" style="font-size:0.8rem;"><i class="bi bi-check-circle-fill me-1"></i>All passed</span>'}
+                                        </td>
+                                        <td data-order="${fc.length}">
+                                            ${fc.length > 0
+                                                ? `<span class="badge bg-danger">${fc.length}</span>`
+                                                : '<span class="text-muted">0</span>'}
+                                        </td>
+                                    </tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        // Build pie chart
+        if (pieLabels.length > 0) {
+            destroyChart('chartFailurePie');
+            const ctxPie = document.getElementById('chartFailurePie').getContext('2d');
+            const defaults = chartDefaults();
+            state.charts['chartFailurePie'] = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieCounts,
+                        backgroundColor: pieLabels.map((_, i) => pieColors[i % pieColors.length]),
+                        borderColor: 'rgba(13, 17, 23, 0.6)',
+                        borderWidth: 2,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { color: '#8b949e', boxWidth: 12, padding: 10, font: { size: 11 } },
+                        },
+                        tooltip: {
+                            ...defaults.plugins.tooltip,
+                            callbacks: {
+                                label: ctx => {
+                                    const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+                                    const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                                    return `${ctx.label}: ${ctx.parsed} failures (${pct}%)`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        // Initialize DataTable
+        destroyTable('tableAllPrs');
+
+        // Register custom filter if not already present
+        const filterIdx = $.fn.dataTable.ext.search.indexOf(_allPrsCheckFilterFn);
+        if (filterIdx === -1) $.fn.dataTable.ext.search.push(_allPrsCheckFilterFn);
+
+        state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
+            pageLength: 25,
+            order: [[6, 'desc']],  // sort by # Failures descending
+            language: { search: '', searchPlaceholder: 'Search PRs...' },
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+        });
+
+        // Animate stat counters
+        animateAllCounters(container);
+    }
+
     /** Custom DataTables filter function for check name/result filters */
     function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
-        // Only apply to the tableAllPrs table
         if (settings.nTable.id !== 'tableAllPrs') return true;
 
         const checkName = (document.getElementById('filterCheckName')?.value || '').trim();
         const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
         if (!checkName && !checkResult) return true;
 
-        // Get the original PR data from the row's data-pr-idx attribute
         const row = settings.aoData[dataIndex]?.nTr;
         const idx = row ? parseInt(row.dataset.prIdx, 10) : -1;
-        const pr = _allPrsData[idx];
+        // displayPrs is the currently-rendered subset; look up from _allPrsData based on view mode
+        const displayPrs = _allPrsShowAll
+            ? _allPrsData
+            : _allPrsData.filter(p => (p.failed_checks || []).length > 0)
+                         .sort((a, b) => (b.failed_checks || []).length - (a.failed_checks || []).length);
+        const pr = displayPrs[idx];
         if (!pr) return true;
 
         const prCheckNames = pr.check_names || [];
         const prFailedChecks = pr.failed_checks || [];
 
-        if (checkName && checkResult === 'failed') {
-            // Show PRs where this specific check failed
-            return prFailedChecks.includes(checkName);
-        }
-        if (checkName && checkResult === 'passed') {
-            // Show PRs that have this check and it did NOT fail
-            return prCheckNames.includes(checkName) && !prFailedChecks.includes(checkName);
-        }
+        if (checkName && checkResult === 'failed') return prFailedChecks.includes(checkName);
+        if (checkName && checkResult === 'passed') return prCheckNames.includes(checkName) && !prFailedChecks.includes(checkName);
         if (checkName) {
-            // Show PRs that have this check (any result)
+            // In failures-only mode, filter to PRs where this check specifically failed
+            if (!_allPrsShowAll) return prFailedChecks.includes(checkName);
             return prCheckNames.includes(checkName);
         }
-        if (checkResult === 'failed') {
-            // Show PRs with any failed check
-            return prFailedChecks.length > 0;
-        }
-        if (checkResult === 'passed') {
-            // Show PRs where all checks passed (has checks, none failed)
-            return prCheckNames.length > 0 && prFailedChecks.length === 0;
-        }
+        if (checkResult === 'failed') return prFailedChecks.length > 0;
+        if (checkResult === 'passed') return prCheckNames.length > 0 && prFailedChecks.length === 0;
         return true;
     }
 
@@ -2129,7 +2119,6 @@
         const dt = state.dataTables['tableAllPrs'];
         if (dt) {
             dt.draw();
-            // Update the filter count
             const info = dt.page.info();
             const countEl = document.getElementById('allPrsFilterCount');
             if (countEl) {

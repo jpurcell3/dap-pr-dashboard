@@ -1878,6 +1878,7 @@
     // ---------------------------------------------------------------------------
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
+    let _allPrsDisplayData = []; // the displayPrs array used to build the current table
     let _insightViewMode = 'checks'; // 'checks' or 'severity'
     let _bottleneckData = [];  // cached bottleneck data from /api/bottlenecks
 
@@ -2340,6 +2341,7 @@
             .filter(p => p._groupedFailed.length > 0)
             .sort((a, b) => b._groupedFailed.length - a._groupedFailed.length);
         const displayPrs = _allPrsShowAll ? prsWithGroupedFailures : failedPrs;
+        _allPrsDisplayData = displayPrs;
 
         // Failure counts by GROUP for pie chart
         const failureByGroup = {};
@@ -2528,12 +2530,8 @@
 
         const row = settings.aoData[dataIndex]?.nTr;
         const idx = row ? parseInt(row.dataset.prIdx, 10) : -1;
-        const displayPrs = _allPrsShowAll
-            ? _allPrsData
-            : _allPrsData.filter(p => (p.failed_checks || []).length > 0)
-                         .sort((a, b) => (b.failed_checks || []).length - (a.failed_checks || []).length);
-        const pr = displayPrs[idx];
-        if (!pr) return true;
+        const pr = _allPrsDisplayData[idx];
+        if (!pr) return false;
 
         const prCheckNames = pr.check_names || [];
         const prFailedChecks = pr.failed_checks || [];

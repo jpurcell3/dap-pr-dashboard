@@ -2124,10 +2124,12 @@
                     </div>
                 </div>
                 ${pieLabels.length > 0 ? `
-                <h6 class="text-muted mb-2"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
                 <div class="d-flex justify-content-center align-items-start" style="min-height:260px;">
-                    <div style="flex:0 0 260px; position:relative; height:260px;">
-                        <canvas id="chartFailurePie"></canvas>
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        <h6 class="text-muted mb-1"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
+                        <div style="width:260px; position:relative; height:246px;">
+                            <canvas id="chartFailurePie"></canvas>
+                        </div>
                     </div>
                     <div id="pieLegendContainer" class="ms-3" style="max-width:420px; max-height:260px; overflow-y:auto;"></div>
                 </div>
@@ -2162,20 +2164,22 @@
                         <div><span class="fw-bold" style="color:var(--accent-blue);">${lowCount}</span> <span class="text-muted small">low</span></div>
                     </div>
                 </div>
-                <h6 class="text-muted mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Bottleneck Types</h6>
                 <div class="d-flex align-items-start">
-                    <!-- Doughnut: slightly left of center (~45%) with legend adjacent -->
-                    <div style="flex:0 0 73%; display:flex; align-items:start; justify-content:center; padding-right:12px;">
+                    <!-- Doughnut: slightly left of center with title and legend adjacent -->
+                    <div style="flex:0 0 62%; display:flex; align-items:start; justify-content:center; padding-right:12px;">
                         ${bnLabels.length > 0 ? `
-                        <div style="flex:0 0 45%; position:relative; max-height:320px;">
-                            <canvas id="chartBottleneckTypes"></canvas>
+                        <div style="display:flex; flex-direction:column; align-items:center; flex:0 0 45%; max-height:320px;">
+                            <h6 class="text-muted mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Bottleneck Types</h6>
+                            <div style="width:100%; position:relative; flex:1;">
+                                <canvas id="chartBottleneckTypes"></canvas>
+                            </div>
                         </div>
                         <div id="bnLegendContainer" class="ms-2" style="max-width:260px; max-height:320px; overflow-y:auto; flex-shrink:0;"></div>
                         ` : '<p class="text-muted py-3">No bottleneck data.</p>'}
                     </div>
                     <!-- Time phases: lower right -->
                     ${hasTimingData ? `
-                    <div style="flex:0 0 27%; padding-left:12px; display:flex; flex-direction:column; justify-content:flex-end; min-height:320px;">
+                    <div style="flex:0 0 38%; padding-left:12px; display:flex; flex-direction:column; justify-content:flex-end; min-height:320px;">
                         <div>
                             <p class="text-muted small mb-1">${mergedPrs.length} merged PRs &mdash; avg hrs</p>
                             <div style="position:relative; height:190px;">

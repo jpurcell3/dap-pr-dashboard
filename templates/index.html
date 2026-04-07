@@ -2958,6 +2958,9 @@
                                 if (['failure','cancelled','timed_out','action_required'].includes(conclusion)) return 'failure';
                                 return 'pending';
                             };
+                            const nonSuccess = runs.filter(c => !['success','neutral','skipped'].includes(c.conclusion));
+                            const displayRuns = failedRuns.length > 0 ? nonSuccess : runs;
+                            const hiddenCount = runs.length - displayRuns.length;
                             return `
                         <div class="section-card">
                             <h5><i class="bi bi-shield-check me-2"></i>Checks
@@ -2971,7 +2974,7 @@
                                 ${chk.failure ? `<div class="bar-failure" style="width:${pct(chk.failure)}%"></div>` : ''}
                                 ${chk.pending ? `<div class="bar-pending" style="width:${pct(chk.pending)}%"></div>` : ''}
                             </div>
-                            ${runs.map(c => `
+                            ${displayRuns.map(c => `
                                 <div class="check-item">
                                     <span class="check-icon">${checkIcon(c.conclusion)}</span>
                                     <span class="check-name" title="${esc(c.name)}">${esc(c.name)}</span>
@@ -2984,6 +2987,12 @@
                                         ${c.output_summary ? `<span class="ms-1">${esc(truncate(c.output_summary, 500))}</span>` : ''}
                                     </div>` : ''}
                             `).join('')}
+                            ${hiddenCount > 0 ? `
+                            <div class="text-center mt-2">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllChecks(this)" data-all-checks='${JSON.stringify(runs.map(c => ({name:c.name,conclusion:c.conclusion,details_url:c.details_url||""}))).replace(/'/g,"&#39;")}'>
+                                    <i class="bi bi-eye me-1"></i>${hiddenCount} passed check${hiddenCount !== 1 ? 's' : ''} hidden
+                                </button>
+                            </div>` : ''}
                         </div>`;
                         })()}
 
@@ -3102,6 +3111,36 @@
                     ${numVal != null ? `<small class="text-muted ms-1">(${numVal}h)</small>` : ''}
                 </span>
             </div>`;
+    }
+
+    /** Toggle visibility of passed checks in PR Detail */
+    function toggleAllChecks(btn) {
+        const card = btn.closest('.section-card');
+        if (!card) return;
+        const existing = card.querySelectorAll('.check-item-passed');
+        if (existing.length > 0) {
+            existing.forEach(el => el.remove());
+            btn.innerHTML = `<i class="bi bi-eye me-1"></i>${btn.dataset.hiddenCount} passed check${btn.dataset.hiddenCount !== '1' ? 's' : ''} hidden`;
+            return;
+        }
+        try {
+            const allChecks = JSON.parse(btn.dataset.allChecks);
+            const passed = allChecks.filter(c => ['success','neutral','skipped'].includes(c.conclusion));
+            btn.dataset.hiddenCount = String(passed.length);
+            const frag = document.createDocumentFragment();
+            passed.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'check-item check-item-passed';
+                div.innerHTML = `
+                    <span class="check-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                    <span class="check-name" title="${esc(c.name)}">${esc(c.name)}</span>
+                    <span class="check-badge success">${esc(c.conclusion)}</span>
+                    ${c.details_url ? `<a href="${esc(c.details_url)}" target="_blank" class="ms-2 text-muted" style="font-size:0.78rem;"><i class="bi bi-box-arrow-up-right"></i></a>` : ''}`;
+                frag.appendChild(div);
+            });
+            btn.parentElement.before(frag);
+            btn.innerHTML = '<i class="bi bi-eye-slash me-1"></i>Hide passed checks';
+        } catch (e) { console.error('toggleAllChecks:', e); }
     }
 
     // ---------------------------------------------------------------------------

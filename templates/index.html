@@ -2217,11 +2217,11 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 9 } }, ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: 'rgba(139,148,158,0.1)' } },
+                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 18 } }, ticks: { color: '#8b949e', font: { size: 18 } }, grid: { color: 'rgba(139,148,158,0.1)' } },
                         y: { stacked: true, display: false },
                     },
                     plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 8, padding: 6, font: { size: 9 } } },
+                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 14, padding: 8, font: { size: 18 } } },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x} hrs` } },
                     },
                 },

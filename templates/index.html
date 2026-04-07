@@ -805,7 +805,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#allprs" id="navAllPrs">
-                            <i class="bi bi-code-square me-1"></i>PR Insight
+                            <i class="bi bi-code-square me-1"></i>PR Insights
                         </a>
                     </li>
                 </ul>
@@ -912,7 +912,7 @@
             </div>
         </div>
 
-        <!-- PR Insight View -->
+        <!-- PR Insights View -->
         <div class="view" id="viewAllPrs">
             <div id="allPrsContent">
                 <div class="section-loading">
@@ -1280,7 +1280,7 @@
                 }
                 break;
             case 'bottlenecks':
-                // Redirect legacy route to merged PR Insight tab (severity mode)
+                // Redirect legacy route to merged PR Insights tab (severity mode)
                 _insightViewMode = 'severity';
                 showView('viewAllPrs');
                 document.getElementById('navAllPrs').classList.add('active');
@@ -1874,7 +1874,7 @@
     }
 
     // ---------------------------------------------------------------------------
-    // PR Insight View (dedicated tab – defaults to failures-only with pie chart)
+    // PR Insights View (dedicated tab – defaults to failures-only with pie chart)
     // ---------------------------------------------------------------------------
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
@@ -2056,7 +2056,7 @@
         if (container && _allPrsData.length) renderInsightView(container);
     }
 
-    /** Core render for the PR Insight tab */
+    /** Core render for the PR Insights tab */
     function renderAllPrsView(container, allPrs) {
         // --- Grouped failure data ------------------------------------------------
         // Map each PR's failed_checks to grouped names
@@ -3179,7 +3179,7 @@
     }
 
     // ---------------------------------------------------------------------------
-    // Severity View (bottlenecks rendered inside the merged PR Insight tab)
+    // Severity View (bottlenecks rendered inside the merged PR Insights tab)
     // ---------------------------------------------------------------------------
     function renderSeverityView(container, bottlenecks) {
         // Collect unique repos, types, severities
@@ -3727,11 +3727,11 @@
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>o</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>PR Insight (Severity)</span>
+                        <span>PR Insights (Severity)</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>b</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>PR Insight (Checks)</span>
+                        <span>PR Insights (Checks)</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>p</kbd></span>
                     </div>
                     <div class="shortcut-row">

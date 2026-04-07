@@ -6,6 +6,8 @@ bottleneck detection, and repository summaries sourced from
 GitHub / GitHub Enterprise.
 """
 
+__version__ = "1.0.0"
+
 import logging
 import os
 import threading
@@ -182,7 +184,7 @@ def _build_overview(repo_summaries: list) -> dict:
 @app.route("/")
 def index():
     """Serve the main dashboard HTML page."""
-    return render_template("index.html")
+    return render_template("index.html", version=__version__)
 
 
 # 1b. Config info -------------------------------------------------------------

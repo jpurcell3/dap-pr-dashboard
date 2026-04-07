@@ -1113,6 +1113,26 @@
         return str.length > len ? str.substring(0, len) + '...' : str;
     }
 
+    /** Filter a check output_summary to only keep failure/error lines.
+     *  Strips lines that contain success markers (checkmarks, "passed", etc.)
+     *  and keeps lines with failure markers (crosses, "failed", "error", etc.)
+     *  or lines that don't match either pattern (context lines). */
+    function filterFailureLines(text) {
+        if (!text) return '';
+        const lines = text.split(/\n/);
+        // Patterns that indicate a PASSED / success line
+        const passRe = /(\u2705|\u2714|\u2713|:white_check_mark:|:heavy_check_mark:|:check:|✔️|☑️|\u2611)/i;
+        // Patterns that indicate a FAILED / error line
+        const failRe = /(\u274C|\u274E|\u2716|\u2718|:x:|:cross_mark:|:heavy_multiplication_x:|❌|⛔|\u26D4)/i;
+        const hasFailMarkers = lines.some(l => failRe.test(l));
+        const hasPassMarkers = lines.some(l => passRe.test(l));
+        // Only filter if we see a mix of pass and fail markers
+        if (!hasFailMarkers || !hasPassMarkers) return truncate(text, 500);
+        const kept = lines.filter(l => !passRe.test(l) || failRe.test(l));
+        const result = kept.join('\n').trim();
+        return truncate(result, 500);
+    }
+
     /** Generic Chart.js default options for dark theme */
     function chartDefaults() {
         return {
@@ -2984,7 +3004,7 @@
                                 ${c.conclusion === 'failure' && (c.output_title || c.output_summary) ? `
                                     <div class="check-failure-detail">
                                         ${c.output_title ? `<strong>${esc(c.output_title)}</strong>` : ''}
-                                        ${c.output_summary ? `<span class="ms-1">${esc(truncate(c.output_summary, 500))}</span>` : ''}
+                                        ${c.output_summary ? `<span class="ms-1">${esc(filterFailureLines(c.output_summary))}</span>` : ''}
                                     </div>` : ''}
                             `).join('')}
                             ${hiddenCount > 0 ? `

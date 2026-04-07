@@ -2033,6 +2033,22 @@
         }
     }
 
+    /** Handle click on Failed Checks doughnut segment – filter the table */
+    function _onDoughnutFilterClick(filterVal, displayName) {
+        const nameEl = document.getElementById('filterCheckName');
+        if (nameEl) nameEl.value = filterVal;
+        const label = document.getElementById('checkGroupLabel');
+        if (label) label.textContent = displayName || 'All Check Groups';
+        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
+        applyAllPrsCheckFilter();
+    }
+
+    /** Handle click on Bottlenecks doughnut segment – filter by type */
+    function _onBottleneckDoughnutClick(typeName) {
+        const typeEl = document.getElementById('filterType');
+        if (typeEl) { typeEl.value = typeName; applyBottleneckFilters(); }
+    }
+
     /** Switch between severity and checks views */
     function switchInsightMode(mode) {
         _insightViewMode = mode;
@@ -2086,11 +2102,26 @@
         // === Build HTML ===
         let html = '';
 
-        // Charts section (always visible)
-        if (hasChartData) {
+        // Charts section – content depends on active mode
+        if (checksActive && pieLabels.length > 0) {
+            // PR Checks mode: Failed Checks doughnut, full width, legend on right
+            html += `
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="section-card">
+                        <h6 class="text-muted mb-2"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
+                        <div class="d-flex align-items-center" style="min-height:260px;">
+                            <div style="flex:0 0 260px; position:relative; height:260px;">
+                                <canvas id="chartFailurePie"></canvas>
+                            </div>
+                            <div id="pieLegendContainer" class="ms-3" style="flex:1; max-height:260px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        } else if (!checksActive) {
+            // Bottlenecks mode: Where Time Goes + Bottlenecks doughnut side by side
             html += `<div class="row g-3 mb-3">`;
-
-            // Left: Where Time Goes
             if (hasTimingData) {
                 html += `
                 <div class="col-lg-4">
@@ -2103,22 +2134,10 @@
                     </div>
                 </div>`;
             }
-
-            // Right: mode-conditional doughnut widget
-            const doughnutColSize = hasTimingData ? 'col-lg-8' : 'col-12';
-            if (checksActive && pieLabels.length > 0) {
+            if (bnLabels.length > 0) {
+                const bnColSize = hasTimingData ? 'col-lg-8' : 'col-12';
                 html += `
-                <div class="${doughnutColSize}">
-                    <div class="section-card h-100">
-                        <h6 class="text-muted mb-2"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
-                        <div style="position:relative; max-height:220px;">
-                            <canvas id="chartFailurePie"></canvas>
-                        </div>
-                    </div>
-                </div>`;
-            } else if (!checksActive && bnLabels.length > 0) {
-                html += `
-                <div class="${doughnutColSize}">
+                <div class="${bnColSize}">
                     <div class="section-card h-100">
                         <h6 class="text-muted mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks</h6>
                         <div style="position:relative; max-height:220px;">
@@ -2127,7 +2146,6 @@
                     </div>
                 </div>`;
             }
-
             html += `</div>`;
         }
 
@@ -2155,8 +2173,8 @@
         // === Initialize charts ===
         const defaults = chartDefaults();
 
-        // 1. Time phases stacked horizontal bar
-        if (hasTimingData) {
+        // 1. Time phases stacked horizontal bar – only in bottlenecks mode
+        if (!checksActive && hasTimingData) {
             destroyChart('chartTimePhases');
             const ctx = document.getElementById('chartTimePhases').getContext('2d');
             state.charts['chartTimePhases'] = new Chart(ctx, {
@@ -2185,7 +2203,7 @@
             });
         }
 
-        // 2. Failure pie (doughnut) – only in checks mode
+        // 2. Failure pie (doughnut) – only in checks mode, legend rendered externally
         if (checksActive && pieLabels.length > 0) {
             destroyChart('chartFailurePie');
             const ctxPie = document.getElementById('chartFailurePie').getContext('2d');
@@ -2198,14 +2216,35 @@
                 options: {
                     responsive: true, maintainAspectRatio: true,
                     plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 10, padding: 8, font: { size: 10 } } },
+                        legend: { display: false },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s,v)=>s+v,0); return `${ctx.label}: ${ctx.parsed} PRs (${t>0?((ctx.parsed/t)*100).toFixed(1):0}%)`; } } },
+                    },
+                    onClick: (evt, elements) => {
+                        if (!elements.length) return;
+                        const idx = elements[0].index;
+                        const groupName = pieLabels[idx];
+                        _onDoughnutFilterClick('group:' + groupName, groupName);
                     },
                 },
             });
+
+            // Build custom legend items in the side container
+            const legendBox = document.getElementById('pieLegendContainer');
+            if (legendBox) {
+                const total = pieCounts.reduce((s, v) => s + v, 0);
+                legendBox.innerHTML = pieLabels.map((lbl, i) => {
+                    const pct = total > 0 ? ((pieCounts[i] / total) * 100).toFixed(0) : 0;
+                    const color = chartColors[i % chartColors.length];
+                    return `<div class="d-flex align-items-center mb-1 pie-legend-item" style="cursor:pointer;" data-group="${esc(lbl)}" onclick="_onDoughnutFilterClick('group:${esc(lbl)}', '${esc(lbl)}')">
+                        <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${color};flex-shrink:0;" class="me-2"></span>
+                        <span class="text-light small" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(lbl)}">${esc(lbl)}</span>
+                        <span class="text-muted small ms-2" style="flex-shrink:0;">${pieCounts[i]} (${pct}%)</span>
+                    </div>`;
+                }).join('');
+            }
         }
 
-        // 3. Bottleneck types (doughnut) – only in severity mode
+        // 3. Bottleneck types (doughnut) – only in severity mode, clickable filter
         if (!checksActive && bnLabels.length > 0) {
             destroyChart('chartBottleneckTypes');
             const ctxBn = document.getElementById('chartBottleneckTypes').getContext('2d');
@@ -2220,6 +2259,12 @@
                     plugins: {
                         legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 10, padding: 8, font: { size: 10 } } },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s,v)=>s+v,0); return `${ctx.label}: ${ctx.parsed} (${t>0?((ctx.parsed/t)*100).toFixed(1):0}%)`; } } },
+                    },
+                    onClick: (evt, elements) => {
+                        if (!elements.length) return;
+                        const idx = elements[0].index;
+                        const typeName = bnLabels[idx];
+                        _onBottleneckDoughnutClick(typeName);
                     },
                 },
             });

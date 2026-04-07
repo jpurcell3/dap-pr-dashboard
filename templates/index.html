@@ -812,12 +812,6 @@
                             <i class="bi bi-code-square me-1"></i>PR Insight
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#sync" id="navSync">
-                            <i class="bi bi-arrow-repeat me-1"></i>Sync
-                            <span class="badge bg-success ms-1" id="navSyncBadge" style="display:none;font-size:0.65rem;">LIVE</span>
-                        </a>
-                    </li>
                 </ul>
                 <div class="d-flex align-items-center gap-3">
                     <button class="theme-toggle" id="btnThemeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">
@@ -880,6 +874,10 @@
                             </div>
                         </div>
                     </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="openSyncModal()" title="Sync Status">
+                        <i class="bi bi-activity me-1"></i>Status
+                        <span class="badge bg-success ms-1" id="navSyncBadge" style="display:none;font-size:0.6rem;">LIVE</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -938,16 +936,24 @@
             </div>
         </div>
 
-        <!-- Sync / Refresh Status View -->
-        <div class="view" id="viewSync">
-            <div id="syncContent">
-                <div class="section-loading">
-                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                    <p class="mt-2">Loading sync status...</p>
+    </div>
+
+    <!-- Sync Status Modal -->
+    <div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="syncModalLabel"><i class="bi bi-activity me-2"></i>Sync Status</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="syncModalBody">
+                    <div class="section-loading">
+                        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                        <p class="mt-2">Loading sync status...</p>
+                    </div>
                 </div>
             </div>
         </div>
-
     </div>
 
     <!-- jQuery (required by DataTables) -->
@@ -1276,11 +1282,6 @@
                 showView('viewAllPrs');
                 document.getElementById('navAllPrs').classList.add('active');
                 loadAllPrsView();
-                break;
-            case 'sync':
-                showView('viewSync');
-                document.getElementById('navSync').classList.add('active');
-                loadSyncView();
                 break;
             default:
                 showView('viewOverview');
@@ -1699,51 +1700,29 @@
             let html = `
                 <!-- Summary Cards -->
                 <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-4 col-xl">
+                    <div class="col-6 col-md-4">
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="stat-value text-info" data-count-to="${totalRepos}">${totalRepos}</div>
-                                    <div class="stat-label">Total Repos</div>
+                                    <div class="stat-value text-info" data-count-to="${totalPRs}">${totalPRs}</div>
+                                    <div class="stat-label">PRs across ${totalRepos} repos</div>
                                 </div>
-                                <i class="bi bi-folder stat-icon text-info"></i>
+                                <i class="bi bi-code-square stat-icon text-info"></i>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-md-4 col-xl">
-                        <div class="stat-card">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="stat-value" style="color: var(--accent-blue)" data-count-to="${totalPRs}">${totalPRs}</div>
-                                    <div class="stat-label">Total PRs</div>
-                                </div>
-                                <i class="bi bi-code-square stat-icon" style="color: var(--accent-blue)"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-4 col-xl">
+                    <div class="col-6 col-md-4">
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
                                     <div class="stat-value" style="color: var(--accent-purple)" data-count-to="${totalMerged}">${totalMerged}</div>
-                                    <div class="stat-label">Total Merged</div>
+                                    <div class="stat-label">Merged <span class="text-muted">/ ${totalOpen} Open</span></div>
                                 </div>
                                 <i class="bi bi-git stat-icon" style="color: var(--accent-purple)"></i>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-md-4 col-xl">
-                        <div class="stat-card">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="stat-value" style="color: var(--accent-green)" data-count-to="${totalOpen}">${totalOpen}</div>
-                                    <div class="stat-label">Total Open</div>
-                                </div>
-                                <i class="bi bi-record-circle stat-icon" style="color: var(--accent-green)"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-4 col-xl">
+                    <div class="col-6 col-md-4">
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
@@ -1760,9 +1739,9 @@
                 <div class="section-card">
                     <h5 style="cursor:pointer;" onclick="toggleChartPanel('cycleByRepoPanel', this)">
                         <i class="bi bi-bar-chart me-2"></i>Average Cycle Time by Repository
-                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s; transform:rotate(180deg);"></i>
                     </h5>
-                    <div id="cycleByRepoPanel">
+                    <div id="cycleByRepoPanel" style="display:none;">
                         <div class="chart-container" style="height: ${Math.max(200, Math.min(repos.length * 32, 350))}px;">
                             <canvas id="chartCycleByRepo"></canvas>
                         </div>
@@ -2185,27 +2164,15 @@
 
             <!-- Summary cards row -->
             <div class="row g-3 mb-3">
-                <div class="col-sm-6 col-md-3">
-                    <div class="section-card text-center py-3">
-                        <div class="stat-value text-info" data-count-to="${allPrs.length}">0</div>
-                        <div class="stat-label">Total PRs</div>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-md-3">
+                <div class="col-sm-6">
                     <div class="section-card text-center py-3">
                         <div class="stat-value text-danger" data-count-to="${totalFailed}">0</div>
-                        <div class="stat-label">PRs with Failures</div>
+                        <div class="stat-label">PRs with Failures <span class="text-muted">/ ${allPrs.length} total</span></div>
                     </div>
                 </div>
-                <div class="col-sm-6 col-md-3">
+                <div class="col-sm-6">
                     <div class="section-card text-center py-3">
-                        <div class="stat-value text-warning" data-count-to="${totalFailures}">0</div>
-                        <div class="stat-label">Total Failure Groups</div>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-md-3">
-                    <div class="section-card text-center py-3">
-                        <div class="stat-value text-danger" style="font-size:1.1rem;" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 18))}</div>
+                        <div class="stat-value text-warning" style="font-size:1.1rem;" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 22))}</div>
                         <div class="stat-label">Top Failing Group <span class="text-danger">(${worstCount})</span></div>
                     </div>
                 </div>
@@ -2592,9 +2559,9 @@
                 <div class="section-card">
                     <h5 style="cursor:pointer;" onclick="toggleChartPanel('timeBreakdownPanel', this)">
                         <i class="bi bi-layers me-2"></i>Merged PRs Timeline
-                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s; transform:rotate(180deg);"></i>
                     </h5>
-                    <div id="timeBreakdownPanel">
+                    <div id="timeBreakdownPanel" style="display:none;">
                         <div class="chart-container" style="height: ${Math.max(200, Math.min(mergedPrs.length * 28, 400))}px;">
                             <canvas id="chartTimeBreakdown"></canvas>
                         </div>
@@ -3205,23 +3172,20 @@
 
                 <!-- Filters -->
                 <div class="section-card filter-bar-wrap">
-                    <div class="row g-3 filter-bar">
+                    <div class="row g-2 filter-bar align-items-center">
                         <div class="col-md-4">
-                            <label class="form-label text-muted small">Repository</label>
                             <select class="form-select" id="filterRepo" onchange="applyBottleneckFilters()">
                                 <option value="">All Repositories</option>
                                 ${repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label text-muted small">Bottleneck Type</label>
                             <select class="form-select" id="filterType" onchange="applyBottleneckFilters()">
                                 <option value="">All Types</option>
                                 ${types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label text-muted small">Severity</label>
                             <select class="form-select" id="filterSeverity" onchange="applyBottleneckFilters()">
                                 <option value="">All Severities</option>
                                 ${severities.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
@@ -3329,7 +3293,8 @@
 
     /** Load the Sync status page */
     async function loadSyncView() {
-        const container = document.getElementById('syncContent');
+        const container = document.getElementById('syncModalBody');
+        if (!container) return;
 
         try {
             const status = await apiFetch('/api/refresh/status');
@@ -3345,6 +3310,13 @@
                     </button>
                 </div>`;
         }
+    }
+
+    /** Open the Sync Status modal and load data */
+    function openSyncModal() {
+        const modal = new bootstrap.Modal(document.getElementById('syncModal'));
+        modal.show();
+        loadSyncView();
     }
 
     /** Render the full Sync page given a status object */
@@ -3394,10 +3366,6 @@
         }
 
         container.innerHTML = `
-            <h4 class="mb-4" style="color: #f0f6fc;">
-                <i class="bi bi-arrow-repeat me-2 text-info"></i>Sync Status
-            </h4>
-
             <!-- Status & Actions Row -->
             <div class="row g-2 mb-3">
                 <div class="col-6 col-md-3">
@@ -3554,11 +3522,11 @@
             </div>`;
     }
 
-    /** Live-update the Sync page (if visible) with a status object from polling */
+    /** Live-update the Sync modal (if visible) with a status object from polling */
     function updateSyncPageLive(status) {
-        // Only update if the sync view is currently active
-        const syncView = document.getElementById('viewSync');
-        if (!syncView || !syncView.classList.contains('active')) return;
+        // Only update if the sync modal is currently shown
+        const syncModal = document.getElementById('syncModal');
+        if (!syncModal || !syncModal.classList.contains('show')) return;
 
         // Update individual elements instead of re-rendering the whole page
         const progressLabel = document.getElementById('syncProgressLabel');
@@ -3659,7 +3627,7 @@
                 case 'o': navigate('#overview'); return;
                 case 'b': navigate('#bottlenecks'); return;
                 case 'p': navigate('#allprs'); return;
-                case 's': navigate('#sync'); return;
+                case 's': openSyncModal(); return;
             }
         }
 
@@ -3722,7 +3690,7 @@
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>p</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>Sync Status</span>
+                        <span>Sync Status Modal</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>s</kbd></span>
                     </div>
                     <div class="shortcut-row">

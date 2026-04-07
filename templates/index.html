@@ -2102,78 +2102,88 @@
         // === Build HTML ===
         let html = '';
 
-        // Charts section – content depends on active mode
-        if (checksActive && pieLabels.length > 0) {
-            // PR Checks mode: Failed Checks doughnut, full width, legend on right
+        // --- PR Checks mode widget ---
+        if (checksActive) {
             const totalFailed = allPrs.filter(p => (p.failed_checks || []).length > 0).length;
             const worstGroup = pieLabels[0] || '--';
             const worstCount = pieCounts[0] || 0;
             html += `
-            <div class="row g-3 mb-3">
-                <div class="col-12">
-                    <div class="section-card">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="text-muted mb-0"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
-                            <div class="d-flex gap-3 text-end">
-                                <div><span class="text-danger fw-bold">${totalFailed}</span> <span class="text-muted small">/ ${allPrs.length} PRs with failures</span></div>
-                                <div><span class="text-warning fw-bold" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 22))}</span> <span class="text-muted small">top group (${worstCount})</span></div>
-                            </div>
+            <div class="section-card mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="switchInsightMode('severity')">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                            </button>
+                            <button class="btn btn-sm btn-info" onclick="switchInsightMode('checks')">
+                                <i class="bi bi-x-circle me-1"></i>PR Checks
+                            </button>
                         </div>
-                        <div class="d-flex justify-content-center align-items-start" style="min-height:260px;">
-                            <div style="flex:0 0 260px; position:relative; height:260px;">
-                                <canvas id="chartFailurePie"></canvas>
-                            </div>
-                            <div id="pieLegendContainer" class="ms-3" style="max-width:420px; max-height:260px; overflow-y:auto;"></div>
-                        </div>
+                        <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
+                            <i class="bi ${_allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul'} me-1"></i>${_allPrsShowAll ? 'Show Failures Only' : 'View All'}
+                        </button>
+                    </div>
+                    <div class="d-flex gap-3 text-end">
+                        <div><span class="text-danger fw-bold">${totalFailed}</span> <span class="text-muted small">/ ${allPrs.length} PRs with failures</span></div>
+                        <div><span class="text-warning fw-bold" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 22))}</span> <span class="text-muted small">top group (${worstCount})</span></div>
                     </div>
                 </div>
-            </div>`;
-        } else if (!checksActive) {
-            // Bottlenecks mode: Where Time Goes + Bottlenecks doughnut side by side
-            html += `<div class="row g-3 mb-3">`;
-            if (hasTimingData) {
-                html += `
-                <div class="col-lg-4">
-                    <div class="section-card h-100">
-                        <h6 class="text-muted mb-2"><i class="bi bi-clock-history me-1"></i>Where Time Goes</h6>
-                        <p class="text-muted small mb-2">${mergedPrs.length} merged PRs &mdash; avg hours per phase</p>
-                        <div style="position:relative; height:126px;">
-                            <canvas id="chartTimePhases"></canvas>
-                        </div>
+                ${pieLabels.length > 0 ? `
+                <div class="d-flex justify-content-center align-items-start" style="min-height:260px;">
+                    <div style="flex:0 0 260px; position:relative; height:260px;">
+                        <canvas id="chartFailurePie"></canvas>
                     </div>
-                </div>`;
-            }
-            if (bnLabels.length > 0) {
-                const bnColSize = hasTimingData ? 'col-lg-8' : 'col-12';
-                html += `
-                <div class="${bnColSize}">
-                    <div class="section-card h-100">
-                        <h6 class="text-muted mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks</h6>
-                        <div style="position:relative; max-height:220px;">
+                    <div id="pieLegendContainer" class="ms-3" style="max-width:420px; max-height:260px; overflow-y:auto;"></div>
+                </div>` : '<p class="text-muted text-center py-3">No check failures found.</p>'}
+            </div>`;
+
+        // --- Bottlenecks mode widget (merged time + doughnut) ---
+        } else {
+            const totalFlags = bottlenecks.length;
+            const highCount  = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
+            const medCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
+            const lowCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
+            html += `
+            <div class="section-card mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-info" onclick="switchInsightMode('severity')">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="switchInsightMode('checks')">
+                            <i class="bi bi-x-circle me-1"></i>PR Checks
+                        </button>
+                    </div>
+                    <div class="d-flex gap-3 text-end">
+                        <div><span class="text-info fw-bold">${totalFlags}</span> <span class="text-muted small">flags</span></div>
+                        <div><span class="fw-bold" style="color:var(--accent-red);">${highCount}</span> <span class="text-muted small">high</span></div>
+                        <div><span class="fw-bold" style="color:var(--accent-yellow);">${medCount}</span> <span class="text-muted small">med</span></div>
+                        <div><span class="fw-bold" style="color:var(--accent-blue);">${lowCount}</span> <span class="text-muted small">low</span></div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-start">
+                    <!-- Doughnut: 80% from left = 20% from right -->
+                    <div style="flex:0 0 80%; position:relative; display:flex; align-items:start;">
+                        ${bnLabels.length > 0 ? `
+                        <div style="flex:1; position:relative; max-height:320px;">
                             <canvas id="chartBottleneckTypes"></canvas>
                         </div>
+                        <div id="bnLegendContainer" class="ms-3" style="max-width:260px; max-height:320px; overflow-y:auto; flex-shrink:0;"></div>
+                        ` : '<p class="text-muted py-3">No bottleneck data.</p>'}
                     </div>
-                </div>`;
-            }
-            html += `</div>`;
-        }
-
-        // Mode toggle
-        html += `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="btn-group" role="group">
-                    <button class="btn btn-sm ${!checksActive ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('severity')">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
-                    </button>
-                    <button class="btn btn-sm ${checksActive ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('checks')">
-                        <i class="bi bi-x-circle me-1"></i>PR Checks
-                    </button>
+                    <!-- Time phases: lower right -->
+                    ${hasTimingData ? `
+                    <div style="flex:0 0 20%; padding-left:12px; display:flex; flex-direction:column; justify-content:flex-end; min-height:320px;">
+                        <div>
+                            <p class="text-muted small mb-1">${mergedPrs.length} merged PRs &mdash; avg hrs</p>
+                            <div style="position:relative; height:100px;">
+                                <canvas id="chartTimePhases"></canvas>
+                            </div>
+                        </div>
+                    </div>` : ''}
                 </div>
-                ${checksActive ? `
-                <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
-                    <i class="bi ${_allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul'} me-1"></i>${_allPrsShowAll ? 'Show Failures Only' : 'View All'}
-                </button>` : ''}
             </div>`;
+        }
 
         // Table area placeholder
         html += `<div id="insightTableArea"></div>`;
@@ -2201,18 +2211,18 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(139,148,158,0.1)' } },
+                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 9 } }, ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: 'rgba(139,148,158,0.1)' } },
                         y: { stacked: true, display: false },
                     },
                     plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 12, padding: 10, font: { size: 11 } } },
+                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 8, padding: 6, font: { size: 9 } } },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x} hrs` } },
                     },
                 },
             });
         }
 
-        // 2. Failure pie (doughnut) – only in checks mode, legend rendered externally
+        // 2. Failure pie (doughnut) – only in checks mode
         if (checksActive && pieLabels.length > 0) {
             destroyChart('chartFailurePie');
             const ctxPie = document.getElementById('chartFailurePie').getContext('2d');
@@ -2253,7 +2263,7 @@
             }
         }
 
-        // 3. Bottleneck types (doughnut) – only in severity mode, clickable filter
+        // 3. Bottleneck types (doughnut) – only in severity mode, custom legend on right
         if (!checksActive && bnLabels.length > 0) {
             destroyChart('chartBottleneckTypes');
             const ctxBn = document.getElementById('chartBottleneckTypes').getContext('2d');
@@ -2266,7 +2276,7 @@
                 options: {
                     responsive: true, maintainAspectRatio: true,
                     plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 10, padding: 8, font: { size: 10 } } },
+                        legend: { display: false },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s,v)=>s+v,0); return `${ctx.label}: ${ctx.parsed} (${t>0?((ctx.parsed/t)*100).toFixed(1):0}%)`; } } },
                     },
                     onClick: (evt, elements) => {
@@ -2277,6 +2287,20 @@
                     },
                 },
             });
+
+            // Build custom legend for bottleneck types
+            const bnLegendBox = document.getElementById('bnLegendContainer');
+            if (bnLegendBox) {
+                const total = bnCounts.reduce((s, v) => s + v, 0);
+                bnLegendBox.innerHTML = bnLabels.map((lbl, i) => {
+                    const color = chartColors[(i + 3) % chartColors.length];
+                    return `<div class="d-flex align-items-center mb-1" style="cursor:pointer;" onclick="_onBottleneckDoughnutClick('${esc(lbl)}')">
+                        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};flex-shrink:0;" class="me-1"></span>
+                        <span class="text-light small" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(lbl)}">${esc(lbl)}</span>
+                        <span class="text-muted small ms-1" style="flex-shrink:0;">${bnCounts[i]}</span>
+                    </div>`;
+                }).join('');
+            }
         }
 
         // === Render mode-specific table section ===
@@ -3312,41 +3336,7 @@
         const types = [...new Set(bottlenecks.map(b => b.type || b.bottleneck_type || '').filter(Boolean))];
         const severities = [...new Set(bottlenecks.map(b => b.severity || '').filter(Boolean))];
 
-        // Summary stats
-        const totalFlags = bottlenecks.length;
-        const highCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
-        const medCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
-        const lowCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
-
         container.innerHTML = `
-            <!-- Summary Stats -->
-            <div class="row g-2 mb-3">
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-value text-info">${totalFlags}</div>
-                        <div class="stat-label">Total Flags</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-value" style="color: var(--accent-red);">${highCount}</div>
-                        <div class="stat-label">High Severity</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-value" style="color: var(--accent-yellow);">${medCount}</div>
-                        <div class="stat-label">Medium Severity</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-value" style="color: var(--accent-blue);">${lowCount}</div>
-                        <div class="stat-label">Low Severity</div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Filters -->
             <div class="section-card filter-bar-wrap">
                 <div class="row g-2 filter-bar align-items-center">

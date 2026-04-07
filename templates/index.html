@@ -1,5 +1,12 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
+<script>
+    // Apply saved theme before paint to prevent flash
+    (function() {
+        const saved = localStorage.getItem('dap-theme');
+        if (saved) document.documentElement.setAttribute('data-bs-theme', saved);
+    })();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -566,6 +573,68 @@
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin-animation { animation: spin 1s linear infinite; display: inline-block; }
 
+        /* Light theme overrides */
+        [data-bs-theme="light"] {
+            --bs-body-bg: #f6f8fa;
+            --bs-body-color: #1f2328;
+            --card-bg: #ffffff;
+            --card-border: #d0d7de;
+            --hover-bg: #f3f4f6;
+            --nav-bg: #ffffff;
+            --accent-blue: #0969da;
+            --accent-teal: #1a7f6d;
+            --accent-green: #1a7f37;
+            --accent-yellow: #9a6700;
+            --accent-red: #cf222e;
+            --accent-purple: #8250df;
+        }
+        [data-bs-theme="light"] body { background-color: var(--bs-body-bg); color: var(--bs-body-color); }
+        [data-bs-theme="light"] .navbar-custom { background-color: var(--nav-bg); border-bottom-color: var(--card-border); }
+        [data-bs-theme="light"] .navbar-custom .navbar-brand { color: #1f2328; }
+        [data-bs-theme="light"] .navbar-custom .nav-link { color: #656d76; }
+        [data-bs-theme="light"] .navbar-custom .nav-link:hover,
+        [data-bs-theme="light"] .navbar-custom .nav-link.active { color: #1f2328; background-color: var(--hover-bg); }
+        [data-bs-theme="light"] .stat-card { background-color: var(--card-bg); border-color: var(--card-border); }
+        [data-bs-theme="light"] .section-card { background-color: var(--card-bg); border-color: var(--card-border); }
+        [data-bs-theme="light"] .section-card h5 { color: #1f2328; }
+        [data-bs-theme="light"] .table-dark-custom { --bs-table-bg: transparent; --bs-table-color: #1f2328; --bs-table-border-color: var(--card-border); --bs-table-hover-bg: var(--hover-bg); --bs-table-hover-color: #1f2328; }
+        [data-bs-theme="light"] .table-dark-custom thead th { background-color: #f6f8fa; color: #656d76; border-bottom-color: var(--card-border); }
+        [data-bs-theme="light"] .dataTables_wrapper .dataTables_filter input,
+        [data-bs-theme="light"] .dataTables_wrapper .dataTables_length select { background-color: #fff !important; border-color: var(--card-border) !important; color: #1f2328 !important; }
+        [data-bs-theme="light"] .dataTables_wrapper .dataTables_paginate .paginate_button { color: #1f2328 !important; border-color: var(--card-border) !important; }
+        [data-bs-theme="light"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover { background: var(--hover-bg) !important; }
+        [data-bs-theme="light"] .timeline::before { background: var(--card-border); }
+        [data-bs-theme="light"] .timeline-content { background-color: #fff; border-color: var(--card-border); }
+        [data-bs-theme="light"] .timeline-content .event-type { color: #1f2328; }
+        [data-bs-theme="light"] .loading-overlay { background: rgba(246, 248, 250, 0.85); }
+        [data-bs-theme="light"] .refresh-status-widget { background: #fff; border-color: var(--card-border); }
+        [data-bs-theme="light"] .refresh-options-panel { background: #fff; border-color: var(--card-border); }
+        [data-bs-theme="light"] .refresh-options-panel .form-control,
+        [data-bs-theme="light"] .refresh-options-panel .form-select { background-color: #f6f8fa; border-color: var(--card-border); color: #1f2328; }
+        [data-bs-theme="light"] .repo-checklist { background: #f6f8fa; border-color: var(--card-border); }
+        [data-bs-theme="light"] .filter-bar .form-select,
+        [data-bs-theme="light"] .filter-bar .form-control { background-color: #fff; border-color: var(--card-border); color: #1f2328; }
+        [data-bs-theme="light"] .bottleneck-alert.severity-high { background-color: rgba(207, 34, 46, 0.08); }
+        [data-bs-theme="light"] .bottleneck-alert.severity-medium { background-color: rgba(154, 103, 0, 0.08); }
+        [data-bs-theme="light"] .bottleneck-alert.severity-low { background-color: rgba(9, 105, 218, 0.08); }
+        [data-bs-theme="light"] ::-webkit-scrollbar-track { background: #f6f8fa; }
+        [data-bs-theme="light"] ::-webkit-scrollbar-thumb { background: #d0d7de; }
+        [data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #afb8c1; }
+
+        /* Theme toggle button */
+        .theme-toggle { background: transparent; border: 1px solid var(--card-border); border-radius: 6px; color: var(--bs-body-color); padding: 0.25rem 0.5rem; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-size: 1rem; }
+        .theme-toggle:hover { background-color: var(--hover-bg); }
+
+        /* Keyboard shortcut badge */
+        kbd { display: inline-block; padding: 0.15rem 0.4rem; font-size: 0.75rem; font-family: monospace; line-height: 1; color: var(--bs-body-color); background-color: var(--card-bg); border: 1px solid var(--card-border); border-radius: 4px; box-shadow: 0 1px 0 var(--card-border); }
+        .shortcut-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--card-border); }
+        .shortcut-row:last-child { border-bottom: none; }
+        .shortcut-keys { display: flex; gap: 0.25rem; }
+
+        /* Animated counter */
+        @keyframes countUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .stat-value[data-animate] { animation: countUp 0.3s ease-out; }
+
         /* Refresh options dropdown panel */
         .refresh-options-panel {
             background: var(--card-bg);
@@ -673,6 +742,9 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center gap-3">
+                    <button class="theme-toggle" id="btnThemeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">
+                        <i class="bi bi-moon-stars-fill" id="themeIcon"></i>
+                    </button>
                     <span class="refresh-status" id="refreshStatus">
                         <i class="bi bi-clock me-1"></i>Last refreshed: --
                     </span>
@@ -975,6 +1047,84 @@
                 },
             },
         };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Theme toggle
+    // ---------------------------------------------------------------------------
+
+    /** Animate a stat-value element from 0 to its target number */
+    function animateCounter(el, target, duration = 600) {
+        if (target == null || isNaN(target) || target === 0) return;
+        const isFloat = !Number.isInteger(target);
+        const start = performance.now();
+        el.setAttribute('data-animate', '');
+        const step = (now) => {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease-out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const current = eased * target;
+            el.textContent = isFloat ? current.toFixed(1) : Math.round(current).toLocaleString();
+            if (progress < 1) requestAnimationFrame(step);
+            else el.textContent = isFloat ? target.toFixed(1) : target.toLocaleString();
+        };
+        requestAnimationFrame(step);
+    }
+
+    /** Find all stat-value elements with data-count-to and animate them */
+    function animateAllCounters(container) {
+        container.querySelectorAll('.stat-value[data-count-to]').forEach(el => {
+            const target = parseFloat(el.dataset.countTo);
+            const suffix = el.dataset.countSuffix || '';
+            const original = el.textContent;
+            animateCounter(el, target);
+            // Restore suffix after animation
+            if (suffix) {
+                setTimeout(() => { el.textContent = original; }, 650);
+            }
+        });
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-bs-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-bs-theme', next);
+        localStorage.setItem('dap-theme', next);
+        updateThemeIcon(next);
+        updateChartColors(next);
+    }
+
+    function updateThemeIcon(theme) {
+        const icon = document.getElementById('themeIcon');
+        if (!icon) return;
+        icon.className = theme === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+    }
+
+    function updateChartColors(theme) {
+        const textColor = theme === 'dark' ? '#c9d1d9' : '#1f2328';
+        const gridColor = theme === 'dark' ? 'rgba(48,54,61,0.5)' : 'rgba(208,215,222,0.5)';
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+        // Update existing charts
+        Object.values(state.charts).forEach(chart => {
+            if (chart.options.plugins?.legend?.labels) chart.options.plugins.legend.labels.color = textColor;
+            if (chart.options.plugins?.tooltip) {
+                chart.options.plugins.tooltip.backgroundColor = theme === 'dark' ? '#1c2128' : '#ffffff';
+                chart.options.plugins.tooltip.titleColor = theme === 'dark' ? '#f0f6fc' : '#1f2328';
+                chart.options.plugins.tooltip.bodyColor = theme === 'dark' ? '#c9d1d9' : '#1f2328';
+                chart.options.plugins.tooltip.borderColor = theme === 'dark' ? '#30363d' : '#d0d7de';
+            }
+            ['x', 'y'].forEach(axis => {
+                if (chart.options.scales?.[axis]) {
+                    if (chart.options.scales[axis].ticks) chart.options.scales[axis].ticks.color = theme === 'dark' ? '#8b949e' : '#656d76';
+                    if (chart.options.scales[axis].grid) chart.options.scales[axis].grid.color = gridColor;
+                    if (chart.options.scales[axis].title) chart.options.scales[axis].title.color = theme === 'dark' ? '#8b949e' : '#656d76';
+                }
+            });
+            chart.update('none');
+        });
     }
 
     // ---------------------------------------------------------------------------
@@ -1460,7 +1610,7 @@
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="stat-value text-info">${totalRepos}</div>
+                                    <div class="stat-value text-info" data-count-to="${totalRepos}">${totalRepos}</div>
                                     <div class="stat-label">Total Repos</div>
                                 </div>
                                 <i class="bi bi-folder stat-icon text-info"></i>
@@ -1471,7 +1621,7 @@
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="stat-value" style="color: var(--accent-blue)">${totalPRs}</div>
+                                    <div class="stat-value" style="color: var(--accent-blue)" data-count-to="${totalPRs}">${totalPRs}</div>
                                     <div class="stat-label">Total PRs</div>
                                 </div>
                                 <i class="bi bi-code-square stat-icon" style="color: var(--accent-blue)"></i>
@@ -1482,7 +1632,7 @@
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="stat-value" style="color: var(--accent-purple)">${totalMerged}</div>
+                                    <div class="stat-value" style="color: var(--accent-purple)" data-count-to="${totalMerged}">${totalMerged}</div>
                                     <div class="stat-label">Total Merged</div>
                                 </div>
                                 <i class="bi bi-git stat-icon" style="color: var(--accent-purple)"></i>
@@ -1493,7 +1643,7 @@
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="stat-value" style="color: var(--accent-green)">${totalOpen}</div>
+                                    <div class="stat-value" style="color: var(--accent-green)" data-count-to="${totalOpen}">${totalOpen}</div>
                                     <div class="stat-label">Total Open</div>
                                 </div>
                                 <i class="bi bi-record-circle stat-icon" style="color: var(--accent-green)"></i>
@@ -1567,6 +1717,24 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- All Pull Requests (cross-repo) -->
+                <div class="section-card">
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('allPrsPanel', this)">
+                        <i class="bi bi-code-square me-2"></i>All Pull Requests
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                        <small class="text-muted ms-2" style="font-weight:400; font-size:0.78rem;" id="allPrsCount"></small>
+                    </h5>
+                    <div id="allPrsPanel">
+                        <div id="allPrsTableWrap">
+                            <div class="text-center text-muted py-3" style="font-size:0.85rem;">
+                                <button class="btn btn-outline-info btn-sm" onclick="loadAllPrsTable()">
+                                    <i class="bi bi-table me-1"></i>Load All PRs
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>`;
 
             container.innerHTML = html;
@@ -1626,6 +1794,9 @@
                 },
             });
 
+            // Animate stat counters
+            animateAllCounters(container);
+
         } catch (err) {
             console.error('Failed to load overview:', err);
             container.innerHTML = `
@@ -1637,6 +1808,94 @@
                         <i class="bi bi-arrow-clockwise me-1"></i>Retry
                     </button>
                 </div>`;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // All PRs Table (cross-repo, lazy-loaded on overview page)
+    // ---------------------------------------------------------------------------
+    async function loadAllPrsTable() {
+        const wrap = document.getElementById('allPrsTableWrap');
+        if (!wrap) return;
+        wrap.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <span class="text-muted ms-2">Loading all pull requests...</span>
+            </div>`;
+
+        try {
+            const prs = await apiFetch('/api/prs?limit=500');
+            const countEl = document.getElementById('allPrsCount');
+            if (countEl) countEl.textContent = `(${prs.length})`;
+
+            wrap.innerHTML = `
+                <div class="d-flex gap-2 mb-2" id="allPrStateFilters">
+                    <button class="btn btn-sm btn-outline-light active" data-state="all">All</button>
+                    <button class="btn btn-sm btn-outline-success" data-state="open"><i class="bi bi-record-circle me-1"></i>Open</button>
+                    <button class="btn btn-sm btn-outline-info" data-state="merged"><i class="bi bi-git me-1"></i>Merged</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-state="closed"><i class="bi bi-x-circle me-1"></i>Closed</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="tableAllPrs" class="table table-dark-custom table-hover w-100">
+                        <thead>
+                            <tr>
+                                <th>Repo</th>
+                                <th>PR #</th>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>State</th>
+                                <th>Created</th>
+                                <th>Cycle Time</th>
+                                <th>Lines</th>
+                                <th>Bottlenecks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${prs.map(pr => {
+                                const lines = (pr.additions || 0) + (pr.deletions || 0);
+                                return `
+                                <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')">
+                                    <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
+                                    <td><span class="text-info fw-bold">#${pr.number}</span></td>
+                                    <td title="${esc(pr.title)}">${esc(truncate(pr.title, 45))}</td>
+                                    <td>${esc(pr.author || '')}</td>
+                                    <td>${stateBadge(pr.state)}</td>
+                                    <td>${fmtDateShort(pr.created_at)}</td>
+                                    <td data-order="${pr.total_cycle_time_hours || 0}">
+                                        <span class="${cycleClass(pr.total_cycle_time_hours)}">${fmtDuration(pr.total_cycle_time_hours)}</span>
+                                    </td>
+                                    <td data-order="${lines}">${lines > 0 ? lines.toLocaleString() : '--'}</td>
+                                    <td>${pr.bottleneck_count > 0
+                                        ? `<span class="badge bg-warning text-dark">${pr.bottleneck_count}</span>`
+                                        : '<span class="text-muted">--</span>'}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+
+            destroyTable('tableAllPrs');
+            state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
+                pageLength: 25,
+                order: [[5, 'desc']],
+                language: { search: '', searchPlaceholder: 'Search all PRs...' },
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                     "<'row'<'col-sm-12'tr>>" +
+                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            });
+
+            // State filter buttons
+            document.querySelectorAll('#allPrStateFilters button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#allPrStateFilters button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const st = btn.dataset.state;
+                    const dt = state.dataTables['tableAllPrs'];
+                    if (dt) dt.column(4).search(st === 'all' ? '' : st, true, false).draw();
+                });
+            });
+        } catch (err) {
+            wrap.innerHTML = `<div class="text-center text-danger py-3">${esc(err.message)}</div>`;
         }
     }
 
@@ -1749,6 +2008,19 @@
                     <div id="timeBreakdownPanel">
                         <div class="chart-container" style="height: ${Math.max(200, Math.min(mergedPrs.length * 28, 400))}px;">
                             <canvas id="chartTimeBreakdown"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scatter Plot: Cycle Time vs PR Size -->
+                <div class="section-card">
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('scatterPanel', this)">
+                        <i class="bi bi-scatter-chart me-2"></i>Cycle Time vs PR Size
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="scatterPanel">
+                        <div class="chart-container" style="height: 320px;">
+                            <canvas id="chartScatter"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1985,6 +2257,89 @@
                     <div class="text-center text-muted py-5">
                         <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
                         <p class="mt-2">No bottlenecks detected</p>
+                    </div>`;
+            }
+
+            // Chart: Scatter — Cycle Time vs PR Size (additions + deletions)
+            const scatterPrs = prs.filter(p =>
+                p.total_cycle_time_hours != null && p.total_cycle_time_hours > 0 &&
+                (p.additions != null || p.deletions != null)
+            );
+            destroyChart('chartScatter');
+            const ctxScatter = document.getElementById('chartScatter').getContext('2d');
+            if (scatterPrs.length > 0) {
+                const scatterData = scatterPrs.map(p => ({
+                    x: (p.additions || 0) + (p.deletions || 0),
+                    y: round(p.total_cycle_time_hours),
+                    pr: p,
+                }));
+                state.charts['chartScatter'] = new Chart(ctxScatter, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'PRs',
+                            data: scatterData,
+                            backgroundColor: scatterData.map(d => {
+                                const h = d.y;
+                                if (h <= 24) return 'rgba(63,185,80,0.6)';
+                                if (h <= 72) return 'rgba(210,153,34,0.6)';
+                                return 'rgba(248,81,73,0.6)';
+                            }),
+                            borderColor: scatterData.map(d => {
+                                const h = d.y;
+                                if (h <= 24) return '#3fb950';
+                                if (h <= 72) return '#d29922';
+                                return '#f85149';
+                            }),
+                            borderWidth: 1,
+                            pointRadius: 5,
+                            pointHoverRadius: 8,
+                        }],
+                    },
+                    options: {
+                        ...dflt,
+                        plugins: {
+                            ...dflt.plugins,
+                            legend: { display: false },
+                            tooltip: {
+                                ...dflt.plugins.tooltip,
+                                callbacks: {
+                                    title: items => {
+                                        const d = items[0].raw;
+                                        return `#${d.pr.number}: ${truncate(d.pr.title, 40)}`;
+                                    },
+                                    label: ctx => {
+                                        const d = ctx.raw;
+                                        return [`Lines changed: ${d.x.toLocaleString()}`, `Cycle time: ${fmtDuration(d.y)}`];
+                                    },
+                                },
+                            },
+                        },
+                        scales: {
+                            x: {
+                                ...dflt.scales.x,
+                                title: { display: true, text: 'Lines Changed (additions + deletions)', color: '#8b949e' },
+                                beginAtZero: true,
+                            },
+                            y: {
+                                ...dflt.scales.y,
+                                title: { display: true, text: 'Cycle Time (hours)', color: '#8b949e' },
+                                beginAtZero: true,
+                            },
+                        },
+                        onClick: (e, elements) => {
+                            if (elements.length) {
+                                const d = scatterData[elements[0].index];
+                                navigate(`#pr/${encodeURIComponent(repoName)}/${d.pr.number}`);
+                            }
+                        },
+                    },
+                });
+            } else {
+                ctxScatter.canvas.parentElement.innerHTML += `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Not enough data for scatter plot</p>
                     </div>`;
             }
 
@@ -2757,7 +3112,11 @@
     // Initialization
     // ---------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', async () => {
-        // Set Chart.js global defaults for dark theme
+        // Set theme icon to match saved preference
+        const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+        updateThemeIcon(currentTheme);
+
+        // Set Chart.js global defaults for current theme
         Chart.defaults.color = '#c9d1d9';
         Chart.defaults.borderColor = 'rgba(48, 54, 61, 0.5)';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
@@ -2785,6 +3144,110 @@
         // Handle initial route
         handleRoute();
     });
+
+    // ---------------------------------------------------------------------------
+    // Keyboard shortcuts
+    // ---------------------------------------------------------------------------
+    let _pendingKey = null;
+    let _pendingTimer = null;
+
+    document.addEventListener('keydown', (e) => {
+        // Ignore when typing in inputs
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+
+        const key = e.key.toLowerCase();
+
+        // Two-key combos: g + <key>
+        if (_pendingKey === 'g') {
+            clearTimeout(_pendingTimer);
+            _pendingKey = null;
+            switch (key) {
+                case 'o': navigate('#overview'); return;
+                case 'b': navigate('#bottlenecks'); return;
+                case 's': navigate('#sync'); return;
+            }
+        }
+
+        // Single-key shortcuts
+        switch (key) {
+            case '?':
+                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('shortcutModal'));
+                modal.toggle();
+                return;
+            case 'g':
+                _pendingKey = 'g';
+                _pendingTimer = setTimeout(() => { _pendingKey = null; }, 800);
+                return;
+            case 'escape':
+                // Close modal if open
+                const openModal = document.querySelector('.modal.show');
+                if (openModal) {
+                    bootstrap.Modal.getInstance(openModal)?.hide();
+                    return;
+                }
+                // Navigate back: PR -> repo -> overview
+                const hash = window.location.hash || '#overview';
+                const parts = hash.replace('#', '').split('/');
+                if (parts[0] === 'pr' && parts[1]) {
+                    navigate(`#repo/${parts[1]}`);
+                } else if (parts[0] === 'repo') {
+                    navigate('#overview');
+                }
+                return;
+            case 'r':
+                if (!e.ctrlKey && !e.metaKey) refreshData();
+                return;
+            case 't':
+                if (!e.ctrlKey && !e.metaKey) toggleTheme();
+                return;
+        }
+    });
     </script>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div class="modal fade" id="shortcutModal" tabindex="-1" aria-labelledby="shortcutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background-color: var(--card-bg); border: 1px solid var(--card-border);">
+                <div class="modal-header" style="border-bottom-color: var(--card-border);">
+                    <h5 class="modal-title" id="shortcutModalLabel" style="color: #f0f6fc;"><i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="text-muted mb-2" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Navigation</h6>
+                    <div class="shortcut-row">
+                        <span>Overview</span>
+                        <span class="shortcut-keys"><kbd>g</kbd> <kbd>o</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>Bottlenecks</span>
+                        <span class="shortcut-keys"><kbd>g</kbd> <kbd>b</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>Sync Status</span>
+                        <span class="shortcut-keys"><kbd>g</kbd> <kbd>s</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>Go Back</span>
+                        <span class="shortcut-keys"><kbd>Esc</kbd></span>
+                    </div>
+
+                    <h6 class="text-muted mb-2 mt-3" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Actions</h6>
+                    <div class="shortcut-row">
+                        <span>Refresh All</span>
+                        <span class="shortcut-keys"><kbd>r</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>Toggle Theme</span>
+                        <span class="shortcut-keys"><kbd>t</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>Show This Help</span>
+                        <span class="shortcut-keys"><kbd>?</kbd></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

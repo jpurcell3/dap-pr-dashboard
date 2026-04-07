@@ -524,6 +524,54 @@ def api_summary():
     return jsonify({"repo_summaries": repo_summaries, "overview": overview})
 
 
+# 4b. All PRs (cross-repo) ----------------------------------------------------
+@app.route("/api/prs")
+def api_all_prs():
+    """Return all PRs across all repos with key metrics for the overview table.
+
+    Query parameters
+    ----------------
+    limit : int
+        Maximum number of PRs to return (default 500).
+    """
+    if not data_store_loaded():
+        return (
+            jsonify(
+                {
+                    "error": "No data available. Please call /api/refresh first to "
+                    "fetch data from GitHub."
+                }
+            ),
+            400,
+        )
+
+    limit = min(int(request.args.get("limit", "500")), 2000)
+    all_pr_metrics = data_store_get("pr_metrics", {})
+    all_prs = []
+
+    for repo_name, prs in all_pr_metrics.items():
+        for pr in prs:
+            all_prs.append({
+                "repo": repo_name,
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "author": pr.get("author") or pr.get("user"),
+                "state": pr.get("state"),
+                "created_at": pr.get("created_at"),
+                "merged_at": pr.get("merged_at"),
+                "total_cycle_time_hours": pr.get("total_cycle_time_hours"),
+                "additions": pr.get("additions"),
+                "deletions": pr.get("deletions"),
+                "review_rounds": pr.get("review_rounds"),
+                "bottleneck_count": len(pr.get("bottleneck_flags", []) or pr.get("bottlenecks", []) or []),
+            })
+
+    # Sort by created_at descending
+    all_prs.sort(key=lambda p: p.get("created_at") or "", reverse=True)
+
+    return jsonify(all_prs[:limit])
+
+
 # 5. Single repo detail -------------------------------------------------------
 @app.route("/api/repo/<repo_name>")
 def api_repo(repo_name: str):

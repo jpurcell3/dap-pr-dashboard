@@ -2169,13 +2169,14 @@
                     <h6 class="text-muted" style="position:absolute; left:20%; top:0; transform:translate(-70%,-50%); white-space:nowrap; margin:0; z-index:2;">
                         <i class="bi bi-exclamation-triangle me-1"></i>Bottleneck Types
                     </h6>
-                    <!-- Donut: left 20% to 45% of widget width -->
+                    <!-- Donut + Legend together in one flex container -->
                     ${bnLabels.length > 0 ? `
-                    <div style="position:absolute; left:20%; top:15px; width:25%; height:280px;">
-                        <canvas id="chartBottleneckTypes"></canvas>
+                    <div style="position:absolute; left:20%; top:15px; display:flex; align-items:center; height:280px;">
+                        <div style="width:250px; height:250px; flex-shrink:0;">
+                            <canvas id="chartBottleneckTypes"></canvas>
+                        </div>
+                        <div id="bnLegendContainer" style="margin-left:8px; max-width:160px; max-height:280px; overflow-y:auto; flex-shrink:0;"></div>
                     </div>
-                    <!-- Legend: right-center of donut, 24px (~3 chars) from perimeter -->
-                    <div id="bnLegendContainer" style="position:absolute; left:45%; top:50%; transform:translateY(-50%); margin-left:24px; max-width:200px; max-height:280px; overflow-y:auto;"></div>
                     ` : '<p class="text-muted py-3" style="position:absolute; left:20%; top:40%;">No bottleneck data.</p>'}
                     <!-- Time phases bar chart: starts at 60% from left -->
                     ${hasTimingData ? `

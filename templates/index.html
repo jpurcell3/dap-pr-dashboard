@@ -2012,19 +2012,6 @@
                     </div>
                 </div>
 
-                <!-- Scatter Plot: Cycle Time vs PR Size -->
-                <div class="section-card">
-                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('scatterPanel', this)">
-                        <i class="bi bi-scatter-chart me-2"></i>Cycle Time vs PR Size
-                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
-                    </h5>
-                    <div id="scatterPanel">
-                        <div class="chart-container" style="height: 320px;">
-                            <canvas id="chartScatter"></canvas>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- PRs Table -->
                 <div class="section-card">
                     <h5><i class="bi bi-list-ul me-2"></i>All Pull Requests</h5>
@@ -2257,89 +2244,6 @@
                     <div class="text-center text-muted py-5">
                         <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
                         <p class="mt-2">No bottlenecks detected</p>
-                    </div>`;
-            }
-
-            // Chart: Scatter — Cycle Time vs PR Size (additions + deletions)
-            const scatterPrs = prs.filter(p =>
-                p.total_cycle_time_hours != null && p.total_cycle_time_hours > 0 &&
-                (p.additions != null || p.deletions != null)
-            );
-            destroyChart('chartScatter');
-            const ctxScatter = document.getElementById('chartScatter').getContext('2d');
-            if (scatterPrs.length > 0) {
-                const scatterData = scatterPrs.map(p => ({
-                    x: (p.additions || 0) + (p.deletions || 0),
-                    y: round(p.total_cycle_time_hours),
-                    pr: p,
-                }));
-                state.charts['chartScatter'] = new Chart(ctxScatter, {
-                    type: 'scatter',
-                    data: {
-                        datasets: [{
-                            label: 'PRs',
-                            data: scatterData,
-                            backgroundColor: scatterData.map(d => {
-                                const h = d.y;
-                                if (h <= 24) return 'rgba(63,185,80,0.6)';
-                                if (h <= 72) return 'rgba(210,153,34,0.6)';
-                                return 'rgba(248,81,73,0.6)';
-                            }),
-                            borderColor: scatterData.map(d => {
-                                const h = d.y;
-                                if (h <= 24) return '#3fb950';
-                                if (h <= 72) return '#d29922';
-                                return '#f85149';
-                            }),
-                            borderWidth: 1,
-                            pointRadius: 5,
-                            pointHoverRadius: 8,
-                        }],
-                    },
-                    options: {
-                        ...dflt,
-                        plugins: {
-                            ...dflt.plugins,
-                            legend: { display: false },
-                            tooltip: {
-                                ...dflt.plugins.tooltip,
-                                callbacks: {
-                                    title: items => {
-                                        const d = items[0].raw;
-                                        return `#${d.pr.number}: ${truncate(d.pr.title, 40)}`;
-                                    },
-                                    label: ctx => {
-                                        const d = ctx.raw;
-                                        return [`Lines changed: ${d.x.toLocaleString()}`, `Cycle time: ${fmtDuration(d.y)}`];
-                                    },
-                                },
-                            },
-                        },
-                        scales: {
-                            x: {
-                                ...dflt.scales.x,
-                                title: { display: true, text: 'Lines Changed (additions + deletions)', color: '#8b949e' },
-                                beginAtZero: true,
-                            },
-                            y: {
-                                ...dflt.scales.y,
-                                title: { display: true, text: 'Cycle Time (hours)', color: '#8b949e' },
-                                beginAtZero: true,
-                            },
-                        },
-                        onClick: (e, elements) => {
-                            if (elements.length) {
-                                const d = scatterData[elements[0].index];
-                                navigate(`#pr/${encodeURIComponent(repoName)}/${d.pr.number}`);
-                            }
-                        },
-                    },
-                });
-            } else {
-                ctxScatter.canvas.parentElement.innerHTML += `
-                    <div class="text-center text-muted py-5">
-                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
-                        <p class="mt-2">Not enough data for scatter plot</p>
                     </div>`;
             }
 

@@ -486,6 +486,79 @@
         .filter-bar.row.g-3 { --bs-gutter-y: 0.25rem; }
         .filter-bar-wrap { padding: 0.4rem 0.8rem; margin-bottom: 0.4rem; }
 
+        /* Check group collapsible panel */
+        .chk-grp-trigger {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .chk-grp-panel {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            min-width: 280px;
+            max-height: 360px;
+            overflow-y: auto;
+            z-index: 1050;
+            background: var(--card-bg, #161b22);
+            border: 1px solid var(--card-border, #30363d);
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            margin-top: 2px;
+            padding: 4px 0;
+        }
+        .chk-grp-item, .chk-grp-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #c9d1d9;
+            transition: background 0.12s;
+        }
+        .chk-grp-item:hover, .chk-grp-header:hover {
+            background: rgba(56, 139, 253, 0.15);
+        }
+        .chk-grp-item.active, .chk-grp-child.active {
+            background: rgba(56, 139, 253, 0.25);
+            color: #58a6ff;
+        }
+        .chk-grp-child {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px 4px 32px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            color: #8b949e;
+            transition: background 0.12s;
+        }
+        .chk-grp-child:hover {
+            background: rgba(56, 139, 253, 0.12);
+            color: #c9d1d9;
+        }
+        .chk-grp-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .chk-grp-header-name:hover {
+            text-decoration: underline;
+        }
+        .chk-grp-chevron {
+            font-size: 0.6rem;
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+        .chk-grp-chevron.open {
+            transform: rotate(90deg);
+        }
+
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bs-body-bg); }
@@ -2015,16 +2088,63 @@
         sortedGroups.forEach(g => {
             const children = [...groupToChecks[g]].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
             if (children.length === 1 && children[0] === g) {
-                // Single check that IS its own group – flat option
                 dropdownHtml += `<option value="${esc(g)}">${esc(g)}</option>`;
             } else {
-                // Group header is selectable, children indented below
                 dropdownHtml += `<optgroup label="${esc(g)}">`;
                 dropdownHtml += `<option value="group:${esc(g)}" style="font-weight:600;">${esc(g)} (all)</option>`;
                 children.forEach(c => {
                     dropdownHtml += `<option value="${esc(c)}">&nbsp;&nbsp;${esc(c)}</option>`;
                 });
                 dropdownHtml += '</optgroup>';
+            }
+        });
+
+        // Build collapsible check-group panel HTML (all collapsed by default)
+        // Count failures per group for badge display
+        const failCountByGroup = {};
+        prsWithGroupedFailures.forEach(pr => {
+            pr._groupedFailed.forEach(g => { failCountByGroup[g] = (failCountByGroup[g] || 0) + 1; });
+        });
+        // Count failures per individual check
+        const failCountByCheck = {};
+        allPrs.forEach(pr => {
+            (pr.failed_checks || []).forEach(c => { failCountByCheck[c] = (failCountByCheck[c] || 0) + 1; });
+        });
+
+        let groupPanelHtml = '';
+        sortedGroups.forEach((g, gi) => {
+            const children = [...groupToChecks[g]].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            const gFails = failCountByGroup[g] || 0;
+            const badgeClass = gFails > 0 ? 'bg-danger' : 'bg-secondary';
+            if (children.length === 1 && children[0] === g) {
+                // Single check – flat clickable item, no accordion
+                groupPanelHtml += `
+                    <div class="chk-grp-item" data-filter="${esc(g)}" onclick="selectCheckGroupFilter(this)" title="${esc(g)}">
+                        <span class="chk-grp-name">${esc(g)}</span>
+                        ${gFails > 0 ? `<span class="badge ${badgeClass} ms-auto" style="font-size:0.65rem;">${gFails}</span>` : ''}
+                    </div>`;
+            } else {
+                // Group with children – collapsible accordion
+                const childHtml = children.map(c => {
+                    const cFails = failCountByCheck[c] || 0;
+                    const cBadge = cFails > 0 ? 'bg-danger' : 'bg-secondary';
+                    return `
+                        <div class="chk-grp-child" data-filter="${esc(c)}" onclick="event.stopPropagation(); selectCheckGroupFilter(this)" title="${esc(c)}">
+                            <span class="chk-grp-name">${esc(c)}</span>
+                            ${cFails > 0 ? `<span class="badge ${cBadge}" style="font-size:0.6rem;">${cFails}</span>` : ''}
+                        </div>`;
+                }).join('');
+                groupPanelHtml += `
+                    <div class="chk-grp-accordion">
+                        <div class="chk-grp-header" onclick="toggleCheckGroup(this, event)">
+                            <i class="bi bi-chevron-right chk-grp-chevron"></i>
+                            <span class="chk-grp-name chk-grp-header-name" data-filter="group:${esc(g)}" onclick="event.stopPropagation(); selectCheckGroupFilter(this)">${esc(g)}</span>
+                            ${gFails > 0 ? `<span class="badge ${badgeClass} ms-auto" style="font-size:0.65rem;">${gFails}</span>` : ''}
+                        </div>
+                        <div class="chk-grp-children" style="display:none;">
+                            ${childHtml}
+                        </div>
+                    </div>`;
             }
         });
 
@@ -2107,13 +2227,20 @@
                 <!-- Table column -->
                 <div class="${pieLabels.length > 0 ? 'col-lg-8' : 'col-12'}">
                     <div class="section-card">
-                        <!-- Check group filter -->
+                        <!-- Check group filter panel -->
                         <div class="d-flex gap-2 align-items-end mb-2 flex-wrap">
-                            <div style="min-width:240px;">
+                            <div style="min-width:240px; position:relative;" id="checkGroupFilterWrap">
                                 <label class="form-label text-muted small mb-0">Filter by Check Group</label>
-                                <select class="form-select form-select-sm" id="filterCheckName" onchange="applyAllPrsCheckFilter()">
-                                    ${dropdownHtml}
-                                </select>
+                                <div class="chk-grp-trigger form-select form-select-sm" onclick="toggleCheckGroupPanel()" id="checkGroupTrigger">
+                                    <span id="checkGroupLabel">All Check Groups</span>
+                                </div>
+                                <input type="hidden" id="filterCheckName" value="">
+                                <div class="chk-grp-panel" id="checkGroupPanel" style="display:none;">
+                                    <div class="chk-grp-item" data-filter="" onclick="selectCheckGroupFilter(this)" style="font-style:italic; color:#8b949e;">
+                                        <span class="chk-grp-name">All Check Groups</span>
+                                    </div>
+                                    ${groupPanelHtml}
+                                </div>
                             </div>
                             ${_allPrsShowAll ? `
                             <div style="min-width:140px;">
@@ -2308,8 +2435,58 @@
         const resultEl = document.getElementById('filterCheckResult');
         if (nameEl) nameEl.value = '';
         if (resultEl) resultEl.value = '';
+        // Reset panel label and active state
+        const label = document.getElementById('checkGroupLabel');
+        if (label) label.textContent = 'All Check Groups';
+        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
         applyAllPrsCheckFilter();
     }
+
+    /** Toggle the check-group dropdown panel open/closed */
+    function toggleCheckGroupPanel() {
+        const panel = document.getElementById('checkGroupPanel');
+        if (!panel) return;
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    /** Collapse/expand a group's children in the panel */
+    function toggleCheckGroup(headerEl, event) {
+        const childrenEl = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.chk-grp-chevron');
+        if (!childrenEl) return;
+        const isOpen = childrenEl.style.display !== 'none';
+        childrenEl.style.display = isOpen ? 'none' : 'block';
+        if (chevron) chevron.classList.toggle('open', !isOpen);
+    }
+
+    /** Select a check group/individual check from the panel */
+    function selectCheckGroupFilter(el) {
+        const filterVal = el.dataset.filter ?? el.getAttribute('data-filter') ?? '';
+        const nameEl = document.getElementById('filterCheckName');
+        if (nameEl) nameEl.value = filterVal;
+
+        // Update trigger label
+        const label = document.getElementById('checkGroupLabel');
+        if (label) label.textContent = filterVal ? el.querySelector('.chk-grp-name')?.textContent || filterVal : 'All Check Groups';
+
+        // Mark active
+        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
+        if (filterVal) el.classList.add('active');
+
+        // Close panel and apply filter
+        const panel = document.getElementById('checkGroupPanel');
+        if (panel) panel.style.display = 'none';
+        applyAllPrsCheckFilter();
+    }
+
+    // Close check-group panel when clicking outside
+    document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('checkGroupFilterWrap');
+        const panel = document.getElementById('checkGroupPanel');
+        if (wrap && panel && !wrap.contains(e.target)) {
+            panel.style.display = 'none';
+        }
+    });
 
     // ---------------------------------------------------------------------------
     // Repo Detail Page

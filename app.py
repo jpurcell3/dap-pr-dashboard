@@ -551,6 +551,21 @@ def api_all_prs():
 
     for repo_name, prs in all_pr_metrics.items():
         for pr in prs:
+            # Extract check details: list of {name, conclusion} per check run
+            checks_raw = pr.get("checks") if isinstance(pr.get("checks"), dict) else {}
+            check_runs = checks_raw.get("checks", [])
+            checks_summary = [
+                {"name": c.get("name", ""), "conclusion": c.get("conclusion", "")}
+                for c in check_runs
+            ]
+            # Distinct check names for this PR
+            check_names = sorted({c["name"] for c in checks_summary if c["name"]})
+            # Names of failed checks only
+            failed_checks = sorted({
+                c["name"] for c in checks_summary
+                if c["conclusion"] in ("failure", "cancelled", "timed_out", "action_required")
+            })
+
             all_prs.append({
                 "repo": repo_name,
                 "number": pr.get("number"),
@@ -564,6 +579,9 @@ def api_all_prs():
                 "deletions": pr.get("deletions"),
                 "review_rounds": pr.get("review_rounds"),
                 "bottleneck_count": len(pr.get("bottleneck_flags", []) or pr.get("bottlenecks", []) or []),
+                "checks_overall": checks_raw.get("overall_state", "unknown"),
+                "check_names": check_names,
+                "failed_checks": failed_checks,
             })
 
     # Sort by created_at descending

@@ -1814,6 +1814,8 @@
     // ---------------------------------------------------------------------------
     // All PRs Table (cross-repo, lazy-loaded on overview page)
     // ---------------------------------------------------------------------------
+    let _allPrsData = [];  // raw data from /api/prs for custom filtering
+
     async function loadAllPrsTable() {
         const wrap = document.getElementById('allPrsTableWrap');
         if (!wrap) return;
@@ -1825,16 +1827,53 @@
 
         try {
             const prs = await apiFetch('/api/prs?limit=500');
+            _allPrsData = prs;
             const countEl = document.getElementById('allPrsCount');
             if (countEl) countEl.textContent = `(${prs.length})`;
 
+            // Collect all distinct check names across all PRs
+            const allCheckNames = new Set();
+            prs.forEach(pr => (pr.check_names || []).forEach(n => allCheckNames.add(n)));
+            const checkNamesSorted = [...allCheckNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
             wrap.innerHTML = `
+                <!-- State filters -->
                 <div class="d-flex gap-2 mb-2" id="allPrStateFilters">
                     <button class="btn btn-sm btn-outline-light active" data-state="all">All</button>
                     <button class="btn btn-sm btn-outline-success" data-state="open"><i class="bi bi-record-circle me-1"></i>Open</button>
                     <button class="btn btn-sm btn-outline-info" data-state="merged"><i class="bi bi-git me-1"></i>Merged</button>
                     <button class="btn btn-sm btn-outline-secondary" data-state="closed"><i class="bi bi-x-circle me-1"></i>Closed</button>
                 </div>
+
+                <!-- Check filters -->
+                <div class="section-card filter-bar-wrap mb-2" style="padding: 0.5rem 0.8rem;">
+                    <div class="row g-2 filter-bar align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small mb-0">Check Name</label>
+                            <select class="form-select" id="filterCheckName" onchange="applyAllPrsCheckFilter()">
+                                <option value="">All Checks</option>
+                                ${checkNamesSorted.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label text-muted small mb-0">Check Result</label>
+                            <select class="form-select" id="filterCheckResult" onchange="applyAllPrsCheckFilter()">
+                                <option value="">Any</option>
+                                <option value="failed">Failed</option>
+                                <option value="passed">Passed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearAllPrsCheckFilter()">
+                                <i class="bi bi-x-circle me-1"></i>Clear
+                            </button>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <small class="text-muted" id="allPrsFilterCount"></small>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table id="tableAllPrs" class="table table-dark-custom table-hover w-100">
                         <thead>
@@ -1846,15 +1885,18 @@
                                 <th>State</th>
                                 <th>Created</th>
                                 <th>Cycle Time</th>
-                                <th>Lines</th>
+                                <th>Checks</th>
                                 <th>Bottlenecks</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${prs.map(pr => {
-                                const lines = (pr.additions || 0) + (pr.deletions || 0);
+                            ${prs.map((pr, idx) => {
+                                const chkState = pr.checks_overall || 'unknown';
+                                const chkClass = chkState === 'success' ? 'text-success' : chkState === 'failure' ? 'text-danger' : chkState === 'pending' ? 'text-warning' : 'text-muted';
+                                const chkIcon = chkState === 'success' ? 'bi-check-circle-fill' : chkState === 'failure' ? 'bi-x-circle-fill' : chkState === 'pending' ? 'bi-clock' : '';
+                                const failedStr = (pr.failed_checks || []).join(', ');
                                 return `
-                                <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')">
+                                <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')" data-pr-idx="${idx}">
                                     <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
                                     <td><span class="text-info fw-bold">#${pr.number}</span></td>
                                     <td title="${esc(pr.title)}">${esc(truncate(pr.title, 45))}</td>
@@ -1864,7 +1906,11 @@
                                     <td data-order="${pr.total_cycle_time_hours || 0}">
                                         <span class="${cycleClass(pr.total_cycle_time_hours)}">${fmtDuration(pr.total_cycle_time_hours)}</span>
                                     </td>
-                                    <td data-order="${lines}">${lines > 0 ? lines.toLocaleString() : '--'}</td>
+                                    <td>
+                                        ${chkIcon ? `<i class="bi ${chkIcon} ${chkClass} me-1"></i>` : ''}
+                                        <span class="${chkClass}" style="font-size:0.8rem;">${chkState}</span>
+                                        ${failedStr ? `<div class="text-danger" style="font-size:0.72rem; margin-top:1px;">${esc(truncate(failedStr, 40))}</div>` : ''}
+                                    </td>
                                     <td>${pr.bottleneck_count > 0
                                         ? `<span class="badge bg-warning text-dark">${pr.bottleneck_count}</span>`
                                         : '<span class="text-muted">--</span>'}</td>
@@ -1875,6 +1921,10 @@
                 </div>`;
 
             destroyTable('tableAllPrs');
+
+            // Custom DataTables search for check filters (operates on hidden data attributes)
+            $.fn.dataTable.ext.search.push(_allPrsCheckFilterFn);
+
             state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
                 pageLength: 25,
                 order: [[5, 'desc']],
@@ -1897,6 +1947,76 @@
         } catch (err) {
             wrap.innerHTML = `<div class="text-center text-danger py-3">${esc(err.message)}</div>`;
         }
+    }
+
+    /** Custom DataTables filter function for check name/result filters */
+    function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
+        // Only apply to the tableAllPrs table
+        if (settings.nTable.id !== 'tableAllPrs') return true;
+
+        const checkName = (document.getElementById('filterCheckName')?.value || '').trim();
+        const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
+        if (!checkName && !checkResult) return true;
+
+        // Get the original PR data from the row's data-pr-idx attribute
+        const row = settings.aoData[dataIndex]?.nTr;
+        const idx = row ? parseInt(row.dataset.prIdx, 10) : -1;
+        const pr = _allPrsData[idx];
+        if (!pr) return true;
+
+        const prCheckNames = pr.check_names || [];
+        const prFailedChecks = pr.failed_checks || [];
+
+        if (checkName && checkResult === 'failed') {
+            // Show PRs where this specific check failed
+            return prFailedChecks.includes(checkName);
+        }
+        if (checkName && checkResult === 'passed') {
+            // Show PRs that have this check and it did NOT fail
+            return prCheckNames.includes(checkName) && !prFailedChecks.includes(checkName);
+        }
+        if (checkName) {
+            // Show PRs that have this check (any result)
+            return prCheckNames.includes(checkName);
+        }
+        if (checkResult === 'failed') {
+            // Show PRs with any failed check
+            return prFailedChecks.length > 0;
+        }
+        if (checkResult === 'passed') {
+            // Show PRs where all checks passed (has checks, none failed)
+            return prCheckNames.length > 0 && prFailedChecks.length === 0;
+        }
+        return true;
+    }
+
+    /** Apply the check name/result filters and redraw the table */
+    function applyAllPrsCheckFilter() {
+        const dt = state.dataTables['tableAllPrs'];
+        if (dt) {
+            dt.draw();
+            // Update the filter count
+            const info = dt.page.info();
+            const countEl = document.getElementById('allPrsFilterCount');
+            if (countEl) {
+                const checkName = document.getElementById('filterCheckName')?.value;
+                const checkResult = document.getElementById('filterCheckResult')?.value;
+                if (checkName || checkResult) {
+                    countEl.textContent = `Showing ${info.recordsDisplay} of ${info.recordsTotal}`;
+                } else {
+                    countEl.textContent = '';
+                }
+            }
+        }
+    }
+
+    /** Clear check filters */
+    function clearAllPrsCheckFilter() {
+        const nameEl = document.getElementById('filterCheckName');
+        const resultEl = document.getElementById('filterCheckResult');
+        if (nameEl) nameEl.value = '';
+        if (resultEl) resultEl.value = '';
+        applyAllPrsCheckFilter();
     }
 
     // ---------------------------------------------------------------------------

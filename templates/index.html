@@ -736,7 +736,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#allprs" id="navAllPrs">
-                            <i class="bi bi-code-square me-1"></i>All PRs
+                            <i class="bi bi-code-square me-1"></i>PR Insight
                         </a>
                     </li>
                     <li class="nav-item">
@@ -855,7 +855,7 @@
             </div>
         </div>
 
-        <!-- All PRs View -->
+        <!-- PR Insight View -->
         <div class="view" id="viewAllPrs">
             <div id="allPrsContent">
                 <div class="section-loading">
@@ -1814,7 +1814,7 @@
     }
 
     // ---------------------------------------------------------------------------
-    // All PRs View (dedicated tab – defaults to failures-only with pie chart)
+    // PR Insight View (dedicated tab – defaults to failures-only with pie chart)
     // ---------------------------------------------------------------------------
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
@@ -1935,7 +1935,7 @@
         if (container && _allPrsData.length) renderAllPrsView(container, _allPrsData);
     }
 
-    /** Core render for the All PRs tab */
+    /** Core render for the PR Insight tab */
     function renderAllPrsView(container, allPrs) {
         // --- Grouped failure data ------------------------------------------------
         // Map each PR's failed_checks to grouped names
@@ -2010,7 +2010,7 @@
         ];
 
         const viewLabel = _allPrsShowAll ? 'All Pull Requests' : 'PRs with Failed Checks';
-        const toggleLabel = _allPrsShowAll ? 'Show Failures Only' : 'View All PRs';
+        const toggleLabel = _allPrsShowAll ? 'Show Failures Only' : 'View All';
         const toggleIcon = _allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul';
 
         container.innerHTML = `
@@ -2375,7 +2375,7 @@
                 <!-- Time Breakdown Chart -->
                 <div class="section-card">
                     <h5 style="cursor:pointer;" onclick="toggleChartPanel('timeBreakdownPanel', this)">
-                        <i class="bi bi-layers me-2"></i>Time Breakdown for Merged PRs
+                        <i class="bi bi-layers me-2"></i>Merged PRs Timeline
                         <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
                     </h5>
                     <div id="timeBreakdownPanel">
@@ -3502,7 +3502,7 @@
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>b</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>All PRs</span>
+                        <span>PR Insight</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>p</kbd></span>
                     </div>
                     <div class="shortcut-row">

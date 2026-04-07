@@ -2104,28 +2104,25 @@
                 </div>`;
             }
 
-            // Right: What's Blocking (dual doughnuts)
-            const blockColSize = hasTimingData ? 'col-lg-8' : 'col-12';
-            if (pieLabels.length > 0 || bnLabels.length > 0) {
+            // Right: mode-conditional doughnut widget
+            const doughnutColSize = hasTimingData ? 'col-lg-8' : 'col-12';
+            if (checksActive && pieLabels.length > 0) {
                 html += `
-                <div class="${blockColSize}">
+                <div class="${doughnutColSize}">
                     <div class="section-card h-100">
-                        <h6 class="text-muted mb-2"><i class="bi bi-shield-exclamation me-1"></i>What's Blocking</h6>
-                        <div class="row g-2">
-                            ${pieLabels.length > 0 ? `
-                            <div class="${bnLabels.length > 0 ? 'col-6' : 'col-12'}">
-                                <div style="position:relative; max-height:220px;">
-                                    <canvas id="chartFailurePie"></canvas>
-                                </div>
-                                <div class="text-center text-muted small mt-1">Failures by Check Group</div>
-                            </div>` : ''}
-                            ${bnLabels.length > 0 ? `
-                            <div class="${pieLabels.length > 0 ? 'col-6' : 'col-12'}">
-                                <div style="position:relative; max-height:220px;">
-                                    <canvas id="chartBottleneckTypes"></canvas>
-                                </div>
-                                <div class="text-center text-muted small mt-1">Bottlenecks by Type</div>
-                            </div>` : ''}
+                        <h6 class="text-muted mb-2"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
+                        <div style="position:relative; max-height:220px;">
+                            <canvas id="chartFailurePie"></canvas>
+                        </div>
+                    </div>
+                </div>`;
+            } else if (!checksActive && bnLabels.length > 0) {
+                html += `
+                <div class="${doughnutColSize}">
+                    <div class="section-card h-100">
+                        <h6 class="text-muted mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks</h6>
+                        <div style="position:relative; max-height:220px;">
+                            <canvas id="chartBottleneckTypes"></canvas>
                         </div>
                     </div>
                 </div>`;
@@ -2188,8 +2185,8 @@
             });
         }
 
-        // 2. Failure pie (doughnut)
-        if (pieLabels.length > 0) {
+        // 2. Failure pie (doughnut) – only in checks mode
+        if (checksActive && pieLabels.length > 0) {
             destroyChart('chartFailurePie');
             const ctxPie = document.getElementById('chartFailurePie').getContext('2d');
             state.charts['chartFailurePie'] = new Chart(ctxPie, {
@@ -2208,8 +2205,8 @@
             });
         }
 
-        // 3. Bottleneck types (doughnut)
-        if (bnLabels.length > 0) {
+        // 3. Bottleneck types (doughnut) – only in severity mode
+        if (!checksActive && bnLabels.length > 0) {
             destroyChart('chartBottleneckTypes');
             const ctxBn = document.getElementById('chartBottleneckTypes').getContext('2d');
             state.charts['chartBottleneckTypes'] = new Chart(ctxBn, {
@@ -2355,13 +2352,13 @@
             <!-- Summary cards row -->
             <div class="row g-3 mb-3">
                 <div class="col-sm-6">
-                    <div class="section-card text-center py-3">
+                    <div class="section-card text-center py-2">
                         <div class="stat-value text-danger" data-count-to="${totalFailed}">0</div>
                         <div class="stat-label">PRs with Failures <span class="text-muted">/ ${allPrs.length} total</span></div>
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="section-card text-center py-3">
+                    <div class="section-card text-center py-2">
                         <div class="stat-value text-warning" style="font-size:1.1rem;" title="${esc(worstGroup)}">${esc(truncate(worstGroup, 22))}</div>
                         <div class="stat-label">Top Failing Group <span class="text-danger">(${worstCount})</span></div>
                     </div>

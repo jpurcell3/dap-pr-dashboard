@@ -1820,27 +1820,75 @@
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
 
     /**
-     * Derive a high-level group from a CI check name.
-     * GitHub Actions names typically look like "Build / compile-arm64" or
-     * "Build images / node-18-slim".  We take the prefix before the first
-     * " / " separator as the group.  If there's no separator we try common
-     * keyword prefixes; otherwise the full name is its own group.
+     * Derive a high-level group from a CI check name (case-insensitive).
+     *
+     * Matching order:
+     * 1. Multi-word phrase prefixes (e.g. "Test Front End", "Continuous Integration",
+     *    "Build images") – matched case-insensitively before the " / " split so that
+     *    "test front end / cypress-e2e" groups under "Test Front End".
+     * 2. GitHub Actions matrix separator " / " – the prefix becomes the group.
+     * 3. Wildcard keyword prefixes ("Upload *", "Build *", "Test *", etc.)
+     * 4. Single-word keyword starts (build, test, lint, …).
+     * 5. Fallback: the full name is its own group.
+     *
+     * All comparisons are case-insensitive.  The canonical group label uses
+     * title-case from the first occurrence we see (stored in _groupLabelMap).
      */
+    const _groupLabelMap = {};  // lowercase -> first-seen casing
+
+    // Multi-word phrases to recognise as groups (order matters – longest first)
+    const _phraseGroups = [
+        'continuous integration',
+        'test front end',
+        'build images',
+    ];
+    // Single-word keyword prefixes
+    const _keywordPrefixes = [
+        'upload', 'build', 'test', 'lint', 'deploy', 'scan', 'security',
+        'analyze', 'publish', 'release', 'validate', 'check',
+    ];
+
     function groupCheckName(name) {
         if (!name) return 'Other';
-        // GitHub Actions matrix format: "Job Name / variant"
-        const slashIdx = name.indexOf(' / ');
-        if (slashIdx > 0) return name.substring(0, slashIdx).trim();
-        // Fallback: cluster by well-known prefixes
         const lower = name.toLowerCase();
-        const prefixes = ['build', 'test', 'lint', 'deploy', 'scan', 'security', 'analyze', 'publish', 'release', 'validate', 'check'];
-        for (const p of prefixes) {
-            if (lower.startsWith(p)) {
-                // Return with original casing of the first word
-                return name.substring(0, p.length);
+
+        // 1. Multi-word phrase prefixes (case-insensitive)
+        for (const phrase of _phraseGroups) {
+            if (lower.startsWith(phrase)) {
+                // Accept if the name IS the phrase, or is followed by separator / space / punctuation
+                const rest = name.substring(phrase.length);
+                if (rest === '' || /^[\s\/\-_:]/.test(rest)) {
+                    const key = phrase;
+                    if (!_groupLabelMap[key]) _groupLabelMap[key] = name.substring(0, phrase.length);
+                    return _groupLabelMap[key];
+                }
             }
         }
-        return name;
+
+        // 2. GitHub Actions matrix format: "Job Name / variant"
+        const slashIdx = name.indexOf(' / ');
+        if (slashIdx > 0) {
+            const prefix = name.substring(0, slashIdx).trim();
+            const key = prefix.toLowerCase();
+            if (!_groupLabelMap[key]) _groupLabelMap[key] = prefix;
+            return _groupLabelMap[key];
+        }
+
+        // 3. Wildcard keyword prefixes ("Upload artifact-name" -> "Upload")
+        for (const kw of _keywordPrefixes) {
+            if (lower.startsWith(kw)) {
+                const rest = name.substring(kw.length);
+                if (rest === '' || /^[\s\/\-_:]/.test(rest)) {
+                    if (!_groupLabelMap[kw]) _groupLabelMap[kw] = name.substring(0, kw.length);
+                    return _groupLabelMap[kw];
+                }
+            }
+        }
+
+        // 4. Fallback: full name is its own group
+        const key = lower;
+        if (!_groupLabelMap[key]) _groupLabelMap[key] = name;
+        return _groupLabelMap[key];
     }
 
     /**
@@ -2169,12 +2217,12 @@
         const isGroupFilter = filterVal.startsWith('group:');
         const groupName = isGroupFilter ? filterVal.substring(6) : '';
 
-        // Resolve which raw check names match the filter
+        // Resolve which raw check names match the filter (case-insensitive group comparison)
         let matchesFilter;
         if (isGroupFilter) {
-            // Match any check whose group equals groupName
-            matchesFilter = (names) => names.some(n => groupCheckName(n) === groupName);
-            var matchesFailed = (names) => names.some(n => groupCheckName(n) === groupName);
+            const groupLower = groupName.toLowerCase();
+            matchesFilter = (names) => names.some(n => groupCheckName(n).toLowerCase() === groupLower);
+            var matchesFailed = matchesFilter;
         } else if (filterVal) {
             // Exact individual check name match
             matchesFilter = (names) => names.includes(filterVal);

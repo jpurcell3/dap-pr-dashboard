@@ -735,6 +735,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#allprs" id="navAllPrs">
+                            <i class="bi bi-code-square me-1"></i>All PRs
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#sync" id="navSync">
                             <i class="bi bi-arrow-repeat me-1"></i>Sync
                             <span class="badge bg-success ms-1" id="navSyncBadge" style="display:none;font-size:0.65rem;">LIVE</span>
@@ -846,6 +851,16 @@
                 <div class="section-loading">
                     <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
                     <p class="mt-2">Loading bottleneck data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- All PRs View -->
+        <div class="view" id="viewAllPrs">
+            <div id="allPrsContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading pull requests...</p>
                 </div>
             </div>
         </div>
@@ -1183,6 +1198,11 @@
                 showView('viewBottlenecks');
                 document.getElementById('navBottlenecks').classList.add('active');
                 loadBottlenecks();
+                break;
+            case 'allprs':
+                showView('viewAllPrs');
+                document.getElementById('navAllPrs').classList.add('active');
+                loadAllPrsView();
                 break;
             case 'sync':
                 showView('viewSync');
@@ -1717,24 +1737,6 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                <!-- All Pull Requests (cross-repo) -->
-                <div class="section-card">
-                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('allPrsPanel', this)">
-                        <i class="bi bi-code-square me-2"></i>All Pull Requests
-                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
-                        <small class="text-muted ms-2" style="font-weight:400; font-size:0.78rem;" id="allPrsCount"></small>
-                    </h5>
-                    <div id="allPrsPanel">
-                        <div id="allPrsTableWrap">
-                            <div class="text-center text-muted py-3" style="font-size:0.85rem;">
-                                <button class="btn btn-outline-info btn-sm" onclick="loadAllPrsTable()">
-                                    <i class="bi bi-table me-1"></i>Load All PRs
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>`;
 
             container.innerHTML = html;
@@ -1812,31 +1814,93 @@
     }
 
     // ---------------------------------------------------------------------------
-    // All PRs Table (cross-repo, lazy-loaded on overview page)
+    // All PRs View (dedicated tab with check-status chart + table)
     // ---------------------------------------------------------------------------
     let _allPrsData = [];  // raw data from /api/prs for custom filtering
 
-    async function loadAllPrsTable() {
-        const wrap = document.getElementById('allPrsTableWrap');
-        if (!wrap) return;
-        wrap.innerHTML = `
-            <div class="text-center py-3">
+    async function loadAllPrsView() {
+        const container = document.getElementById('allPrsContent');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="section-loading">
                 <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                <span class="text-muted ms-2">Loading all pull requests...</span>
+                <p class="mt-2">Loading all pull requests...</p>
             </div>`;
 
         try {
             const prs = await apiFetch('/api/prs?limit=500');
             _allPrsData = prs;
-            const countEl = document.getElementById('allPrsCount');
-            if (countEl) countEl.textContent = `(${prs.length})`;
 
             // Collect all distinct check names across all PRs
             const allCheckNames = new Set();
             prs.forEach(pr => (pr.check_names || []).forEach(n => allCheckNames.add(n)));
             const checkNamesSorted = [...allCheckNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-            wrap.innerHTML = `
+            // Build check-status chart data: per check name, count passed vs failed
+            const checkStats = {};
+            checkNamesSorted.forEach(name => { checkStats[name] = { passed: 0, failed: 0 }; });
+            prs.forEach(pr => {
+                const names = pr.check_names || [];
+                const failed = pr.failed_checks || [];
+                names.forEach(name => {
+                    if (!checkStats[name]) checkStats[name] = { passed: 0, failed: 0 };
+                    if (failed.includes(name)) {
+                        checkStats[name].failed++;
+                    } else {
+                        checkStats[name].passed++;
+                    }
+                });
+            });
+            const chartLabels = Object.keys(checkStats);
+            const chartPassed = chartLabels.map(n => checkStats[n].passed);
+            const chartFailed = chartLabels.map(n => checkStats[n].failed);
+
+            // Summary stats
+            const openCount = prs.filter(p => p.state === 'open').length;
+            const mergedCount = prs.filter(p => p.state === 'merged').length;
+            const closedCount = prs.filter(p => p.state === 'closed').length;
+            const failedPrs = prs.filter(p => (p.failed_checks || []).length > 0).length;
+
+            container.innerHTML = `
+                <h4 class="mb-3"><i class="bi bi-code-square me-2"></i>All Pull Requests <span class="text-muted" style="font-size:0.85rem;">(${prs.length})</span></h4>
+
+                <!-- Summary cards row -->
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6 col-md-3">
+                        <div class="section-card text-center py-3">
+                            <div class="stat-value text-info" data-count-to="${prs.length}">0</div>
+                            <div class="stat-label">Total PRs</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="section-card text-center py-3">
+                            <div class="stat-value text-success" data-count-to="${openCount}">0</div>
+                            <div class="stat-label">Open</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="section-card text-center py-3">
+                            <div class="stat-value" style="color:#a371f7;" data-count-to="${mergedCount}">0</div>
+                            <div class="stat-label">Merged</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="section-card text-center py-3">
+                            <div class="stat-value text-danger" data-count-to="${failedPrs}">0</div>
+                            <div class="stat-label">With Failed Checks</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Check status chart -->
+                ${chartLabels.length > 0 ? `
+                <div class="section-card mb-3">
+                    <h6 class="text-muted mb-2"><i class="bi bi-bar-chart-steps me-1"></i>CI/CD Check Results by Check Name</h6>
+                    <div style="position:relative; height:${Math.max(220, chartLabels.length * 28 + 60)}px;">
+                        <canvas id="chartCheckBreakdown"></canvas>
+                    </div>
+                </div>` : ''}
+
                 <!-- State filters -->
                 <div class="d-flex gap-2 mb-2" id="allPrStateFilters">
                     <button class="btn btn-sm btn-outline-light active" data-state="all">All</button>
@@ -1920,6 +1984,64 @@
                     </table>
                 </div>`;
 
+            // Build check-status stacked bar chart
+            if (chartLabels.length > 0) {
+                destroyChart('chartCheckBreakdown');
+                const ctxCheck = document.getElementById('chartCheckBreakdown').getContext('2d');
+                const defaults = chartDefaults();
+                state.charts['chartCheckBreakdown'] = new Chart(ctxCheck, {
+                    type: 'bar',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [
+                            {
+                                label: 'Passed',
+                                data: chartPassed,
+                                backgroundColor: 'rgba(63, 185, 80, 0.8)',
+                                borderColor: 'rgba(63, 185, 80, 1)',
+                                borderWidth: 1,
+                                borderRadius: 2,
+                            },
+                            {
+                                label: 'Failed',
+                                data: chartFailed,
+                                backgroundColor: 'rgba(248, 81, 73, 0.8)',
+                                borderColor: 'rgba(248, 81, 73, 1)',
+                                borderWidth: 1,
+                                borderRadius: 2,
+                            },
+                        ],
+                    },
+                    options: {
+                        ...defaults,
+                        indexAxis: 'y',
+                        plugins: {
+                            ...defaults.plugins,
+                            legend: { display: true, position: 'top', labels: { color: '#8b949e', boxWidth: 14, padding: 16 } },
+                            tooltip: {
+                                ...defaults.plugins.tooltip,
+                                callbacks: {
+                                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x} PRs`,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: {
+                                ...defaults.scales.x,
+                                stacked: true,
+                                title: { display: true, text: 'PR Count', color: '#8b949e' },
+                            },
+                            y: {
+                                ...defaults.scales.y,
+                                stacked: true,
+                                ticks: { ...defaults.scales.y.ticks, font: { size: 11 } },
+                            },
+                        },
+                    },
+                });
+            }
+
+            // Initialize DataTable
             destroyTable('tableAllPrs');
 
             // Custom DataTables search for check filters (operates on hidden data attributes)
@@ -1944,8 +2066,20 @@
                     if (dt) dt.column(4).search(st === 'all' ? '' : st, true, false).draw();
                 });
             });
+
+            // Animate stat counters
+            animateAllCounters(container);
+
         } catch (err) {
-            wrap.innerHTML = `<div class="text-center text-danger py-3">${esc(err.message)}</div>`;
+            container.innerHTML = `
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load pull requests</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadAllPrsView()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
         }
     }
 
@@ -3189,6 +3323,7 @@
             switch (key) {
                 case 'o': navigate('#overview'); return;
                 case 'b': navigate('#bottlenecks'); return;
+                case 'p': navigate('#allprs'); return;
                 case 's': navigate('#sync'); return;
             }
         }
@@ -3246,6 +3381,10 @@
                     <div class="shortcut-row">
                         <span>Bottlenecks</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>b</kbd></span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span>All PRs</span>
+                        <span class="shortcut-keys"><kbd>g</kbd> <kbd>p</kbd></span>
                     </div>
                     <div class="shortcut-row">
                         <span>Sync Status</span>

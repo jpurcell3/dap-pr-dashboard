@@ -803,11 +803,6 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#bottlenecks" id="navBottlenecks">
-                            <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link" href="#allprs" id="navAllPrs">
                             <i class="bi bi-code-square me-1"></i>PR Insight
                         </a>
@@ -912,16 +907,6 @@
                 <div class="section-loading">
                     <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
                     <p class="mt-2">Loading PR data...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bottlenecks View -->
-        <div class="view" id="viewBottlenecks">
-            <div id="bottlenecksContent">
-                <div class="section-loading">
-                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                    <p class="mt-2">Loading bottleneck data...</p>
                 </div>
             </div>
         </div>
@@ -1294,9 +1279,11 @@
                 }
                 break;
             case 'bottlenecks':
-                showView('viewBottlenecks');
-                document.getElementById('navBottlenecks').classList.add('active');
-                loadBottlenecks();
+                // Redirect legacy route to merged PR Insight tab (severity mode)
+                _insightViewMode = 'severity';
+                showView('viewAllPrs');
+                document.getElementById('navAllPrs').classList.add('active');
+                loadAllPrsView();
                 break;
             case 'allprs':
                 showView('viewAllPrs');
@@ -1890,6 +1877,8 @@
     // ---------------------------------------------------------------------------
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
+    let _insightViewMode = 'checks'; // 'checks' or 'severity'
+    let _bottleneckData = [];  // cached bottleneck data from /api/bottlenecks
 
     /**
      * Derive a high-level group from a CI check name (case-insensitive).
@@ -2019,18 +2008,22 @@
         container.innerHTML = `
             <div class="section-loading">
                 <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                <p class="mt-2">Loading pull requests...</p>
+                <p class="mt-2">Loading data...</p>
             </div>`;
 
         try {
-            const prs = await apiFetch('/api/prs?limit=500');
+            const [prs, bnRaw] = await Promise.all([
+                apiFetch('/api/prs?limit=500'),
+                apiFetch('/api/bottlenecks'),
+            ]);
             _allPrsData = prs;
-            renderAllPrsView(container, prs);
+            _bottleneckData = bnRaw.bottlenecks || bnRaw || [];
+            renderInsightView(container);
         } catch (err) {
             container.innerHTML = `
                 <div class="section-card text-center py-5">
                     <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
-                    <h5 class="mt-3">Failed to load pull requests</h5>
+                    <h5 class="mt-3">Failed to load data</h5>
                     <p class="text-muted">${esc(err.message)}</p>
                     <button class="btn btn-outline-info btn-sm mt-2" onclick="loadAllPrsView()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Retry
@@ -2039,11 +2032,27 @@
         }
     }
 
+    /** Switch between severity and checks views */
+    function switchInsightMode(mode) {
+        _insightViewMode = mode;
+        const container = document.getElementById('allPrsContent');
+        if (container) renderInsightView(container);
+    }
+
+    /** Dispatch render to the active insight view mode */
+    function renderInsightView(container) {
+        if (_insightViewMode === 'severity') {
+            renderSeverityView(container, _bottleneckData);
+        } else {
+            renderAllPrsView(container, _allPrsData);
+        }
+    }
+
     /** Toggle between failures-only and all-PRs view */
     function toggleAllPrsMode() {
         _allPrsShowAll = !_allPrsShowAll;
         const container = document.getElementById('allPrsContent');
-        if (container && _allPrsData.length) renderAllPrsView(container, _allPrsData);
+        if (container && _allPrsData.length) renderInsightView(container);
     }
 
     /** Core render for the PR Insight tab */
@@ -2172,11 +2181,16 @@
         const toggleIcon = _allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul';
 
         container.innerHTML = `
+            <!-- Mode toggle -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="mb-0">
-                    <i class="bi ${_allPrsShowAll ? 'bi-code-square' : 'bi-x-circle-fill text-danger'} me-2"></i>${viewLabel}
-                    <span class="text-muted" style="font-size:0.85rem;">(${displayPrs.length})</span>
-                </h4>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
+                        <i class="bi bi-x-circle me-1"></i>View by Failed Checks
+                    </button>
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('severity')">
+                        <i class="bi bi-exclamation-triangle me-1"></i>View by Severity
+                    </button>
+                </div>
                 <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
                     <i class="bi ${toggleIcon} me-1"></i>${toggleLabel}
                 </button>
@@ -3164,157 +3178,128 @@
     }
 
     // ---------------------------------------------------------------------------
-    // Bottlenecks Page
+    // Severity View (bottlenecks rendered inside the merged PR Insight tab)
     // ---------------------------------------------------------------------------
-    async function loadBottlenecks() {
-        const container = document.getElementById('bottlenecksContent');
+    function renderSeverityView(container, bottlenecks) {
+        // Collect unique repos, types, severities
+        const repos = [...new Set(bottlenecks.map(b => b.repo || b.repo_name || '').filter(Boolean))].sort();
+        const types = [...new Set(bottlenecks.map(b => b.type || b.bottleneck_type || '').filter(Boolean))];
+        const severities = [...new Set(bottlenecks.map(b => b.severity || '').filter(Boolean))];
+
+        // Summary stats
+        const totalFlags = bottlenecks.length;
+        const highCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
+        const medCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
+        const lowCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
+
         container.innerHTML = `
-            <div class="section-loading">
-                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                <p class="mt-2">Loading bottleneck data...</p>
+            <!-- Mode toggle -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
+                        <i class="bi bi-x-circle me-1"></i>View by Failed Checks
+                    </button>
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('severity')">
+                        <i class="bi bi-exclamation-triangle me-1"></i>View by Severity
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="row g-2 mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-value text-info">${totalFlags}</div>
+                        <div class="stat-label">Total Flags</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color: var(--accent-red);">${highCount}</div>
+                        <div class="stat-label">High Severity</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color: var(--accent-yellow);">${medCount}</div>
+                        <div class="stat-label">Medium Severity</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color: var(--accent-blue);">${lowCount}</div>
+                        <div class="stat-label">Low Severity</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="section-card filter-bar-wrap">
+                <div class="row g-2 filter-bar align-items-center">
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterRepo" onchange="applyBottleneckFilters()">
+                            <option value="">All Repositories</option>
+                            ${repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterType" onchange="applyBottleneckFilters()">
+                            <option value="">All Types</option>
+                            ${types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterSeverity" onchange="applyBottleneckFilters()">
+                            <option value="">All Severities</option>
+                            ${severities.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottlenecks Table -->
+            <div class="section-card">
+                <div class="table-responsive">
+                    <table id="tableBottlenecks" class="table table-dark-custom table-hover w-100">
+                        <thead>
+                            <tr>
+                                <th>Repo</th>
+                                <th>PR #</th>
+                                <th>Title</th>
+                                <th>Bottleneck Type</th>
+                                <th>Severity</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${bottlenecks.map(b => `
+                                <tr onclick="navigate('#pr/${encodeURIComponent(b.repo || b.repo_name || '')}/${b.pr_number || b.number || ''}')"
+                                    data-repo="${esc(b.repo || b.repo_name || '')}"
+                                    data-type="${esc(b.type || b.bottleneck_type || '')}"
+                                    data-severity="${esc((b.severity || '').toLowerCase())}">
+                                    <td><span class="repo-name-link">${esc(b.repo || b.repo_name || '')}</span></td>
+                                    <td><span class="text-info fw-bold">#${b.pr_number || b.number || ''}</span></td>
+                                    <td title="${esc(b.pr_title || b.title || '')}">${esc(truncate(b.pr_title || b.title || '', 40))}</td>
+                                    <td><span class="badge bg-secondary">${esc(b.type || b.bottleneck_type || '')}</span></td>
+                                    <td>${severityBadge(b.severity)}</td>
+                                    <td title="${esc(b.description || b.message || '')}">${esc(truncate(b.description || b.message || '', 60))}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
             </div>`;
 
-        try {
-            // Get summary to populate filter dropdowns
-            if (!state.cachedSummary) {
-                state.cachedSummary = await apiFetch('/api/summary');
-            }
-            const allBnRepos = (state.cachedSummary.repo_summaries || []);
-            // Only show repos that have PR data in the filter dropdown
-            const repos = allBnRepos.filter(r => (r.total_prs || 0) > 0).map(r => r.repo_name || r.name);
-
-            const data = await apiFetch('/api/bottlenecks');
-            const bottlenecks = data.bottlenecks || data || [];
-
-            // Collect unique types and severities
-            const types = [...new Set(bottlenecks.map(b => b.type || b.bottleneck_type || '').filter(Boolean))];
-            const severities = [...new Set(bottlenecks.map(b => b.severity || '').filter(Boolean))];
-
-            // Summary stats
-            const totalFlags = bottlenecks.length;
-            const highCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
-            const medCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
-            const lowCount = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
-
-            let html = `
-                <h6 class="mb-2" style="color: #f0f6fc; font-size: 0.85rem;">
-                    <i class="bi bi-exclamation-triangle me-1 text-warning"></i>Bottleneck Analysis
-                </h6>
-
-                <!-- Summary Stats -->
-                <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value text-info">${totalFlags}</div>
-                            <div class="stat-label">Total Flags</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value" style="color: var(--accent-red);">${highCount}</div>
-                            <div class="stat-label">High Severity</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value" style="color: var(--accent-yellow);">${medCount}</div>
-                            <div class="stat-label">Medium Severity</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value" style="color: var(--accent-blue);">${lowCount}</div>
-                            <div class="stat-label">Low Severity</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Filters -->
-                <div class="section-card filter-bar-wrap">
-                    <div class="row g-2 filter-bar align-items-center">
-                        <div class="col-md-4">
-                            <select class="form-select" id="filterRepo" onchange="applyBottleneckFilters()">
-                                <option value="">All Repositories</option>
-                                ${repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <select class="form-select" id="filterType" onchange="applyBottleneckFilters()">
-                                <option value="">All Types</option>
-                                ${types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <select class="form-select" id="filterSeverity" onchange="applyBottleneckFilters()">
-                                <option value="">All Severities</option>
-                                ${severities.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Bottlenecks Table -->
-                <div class="section-card">
-                    <div class="table-responsive">
-                        <table id="tableBottlenecks" class="table table-dark-custom table-hover w-100">
-                            <thead>
-                                <tr>
-                                    <th>Repo</th>
-                                    <th>PR #</th>
-                                    <th>Title</th>
-                                    <th>Bottleneck Type</th>
-                                    <th>Severity</th>
-                                    <th>Description</th>
-                                    <th>Cycle Time</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${bottlenecks.map(b => `
-                                    <tr onclick="navigate('#pr/${encodeURIComponent(b.repo || b.repo_name || '')}/${b.pr_number || b.number || ''}')"
-                                        data-repo="${esc(b.repo || b.repo_name || '')}"
-                                        data-type="${esc(b.type || b.bottleneck_type || '')}"
-                                        data-severity="${esc((b.severity || '').toLowerCase())}">
-                                        <td><span class="repo-name-link">${esc(b.repo || b.repo_name || '')}</span></td>
-                                        <td><span class="text-info fw-bold">#${b.pr_number || b.number || ''}</span></td>
-                                        <td title="${esc(b.pr_title || b.title || '')}">${esc(truncate(b.pr_title || b.title || '', 40))}</td>
-                                        <td><span class="badge bg-secondary">${esc(b.type || b.bottleneck_type || '')}</span></td>
-                                        <td>${severityBadge(b.severity)}</td>
-                                        <td title="${esc(b.description || b.message || '')}">${esc(truncate(b.description || b.message || '', 50))}</td>
-                                        <td data-order="${b.total_cycle_time_hours || 0}">
-                                            <span class="${cycleClass(b.total_cycle_time_hours)}">${fmtDuration(b.total_cycle_time_hours)}</span>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>`;
-
-            container.innerHTML = html;
-
-            // DataTable
-            destroyTable('tableBottlenecks');
-            state.dataTables['tableBottlenecks'] = $('#tableBottlenecks').DataTable({
-                pageLength: 25,
-                order: [[4, 'asc'], [6, 'desc']],
-                language: { search: '', searchPlaceholder: 'Search bottlenecks...' },
-                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
-                     "<'row'<'col-sm-12'tr>>" +
-                     "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
-            });
-
-        } catch (err) {
-            console.error('Failed to load bottlenecks:', err);
-            container.innerHTML = `
-                <div class="section-card text-center py-5">
-                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
-                    <h5 class="mt-3">Failed to load bottleneck data</h5>
-                    <p class="text-muted">${esc(err.message)}</p>
-                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadBottlenecks()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
-                    </button>
-                </div>`;
-        }
+        // DataTable
+        destroyTable('tableBottlenecks');
+        state.dataTables['tableBottlenecks'] = $('#tableBottlenecks').DataTable({
+            pageLength: 25,
+            order: [[4, 'asc']],
+            language: { search: '', searchPlaceholder: 'Search bottlenecks...' },
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+        });
     }
 
     /** Apply dropdown filters to the bottlenecks table */
@@ -3684,7 +3669,7 @@
             _pendingKey = null;
             switch (key) {
                 case 'o': navigate('#overview'); return;
-                case 'b': navigate('#bottlenecks'); return;
+                case 'b': _insightViewMode = 'severity'; navigate('#allprs'); return;
                 case 'p': navigate('#allprs'); return;
                 case 's': openSyncModal(); return;
             }
@@ -3741,11 +3726,11 @@
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>o</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>Bottlenecks</span>
+                        <span>PR Insight (Severity)</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>b</kbd></span>
                     </div>
                     <div class="shortcut-row">
-                        <span>PR Insight</span>
+                        <span>PR Insight (Checks)</span>
                         <span class="shortcut-keys"><kbd>g</kbd> <kbd>p</kbd></span>
                     </div>
                     <div class="shortcut-row">

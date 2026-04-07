@@ -819,7 +819,7 @@
                     <!-- Refresh button group with options dropdown -->
                     <div class="btn-group" id="refreshBtnGroup">
                         <button class="btn btn-sm btn-outline-info" id="btnRefresh" onclick="refreshData()">
-                            <i class="bi bi-arrow-clockwise me-1" id="refreshIcon"></i>Refresh All
+                            <i class="bi bi-arrow-clockwise me-1" id="refreshIcon"></i>Refresh Synced
                         </button>
                         <button class="btn btn-sm btn-outline-info dropdown-toggle dropdown-toggle-split"
                                 id="btnRefreshOptions" data-bs-toggle="dropdown" data-bs-auto-close="outside"
@@ -1353,8 +1353,14 @@
             return;
         }
 
-        // Merge in date range if set and no explicit repos
+        // Default to synced repos only (those with has_data === true)
         if (!options.repos) {
+            const syncedRepos = (state.repoList || [])
+                .filter(r => typeof r === 'object' && r.has_data)
+                .map(r => r.name);
+            if (syncedRepos.length > 0) {
+                options.repos = syncedRepos;
+            }
             Object.assign(options, getDateRangeOptions());
         }
 
@@ -3663,7 +3669,7 @@
                             </button>
                             ` : `
                             <button class="btn btn-info" onclick="refreshData()">
-                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh All Repos
+                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh Synced Repos
                             </button>
                             `}
                             <button class="btn btn-outline-secondary btn-sm" onclick="loadSyncView()">
@@ -3853,7 +3859,7 @@
 
                     <h6 class="text-muted mb-2 mt-3" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Actions</h6>
                     <div class="shortcut-row">
-                        <span>Refresh All</span>
+                        <span>Refresh Synced</span>
                         <span class="shortcut-keys"><kbd>r</kbd></span>
                     </div>
                     <div class="shortcut-row">

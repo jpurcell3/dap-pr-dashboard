@@ -2184,11 +2184,11 @@
             <!-- Mode toggle -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div class="btn-group" role="group">
-                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
-                        <i class="bi bi-x-circle me-1"></i>View by Failed Checks
-                    </button>
                     <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('severity')">
-                        <i class="bi bi-exclamation-triangle me-1"></i>View by Severity
+                        <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                    </button>
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
+                        <i class="bi bi-x-circle me-1"></i>PR Checks
                     </button>
                 </div>
                 <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
@@ -3196,11 +3196,11 @@
             <!-- Mode toggle -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div class="btn-group" role="group">
-                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
-                        <i class="bi bi-x-circle me-1"></i>View by Failed Checks
-                    </button>
                     <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-info' : 'btn-outline-secondary'}" onclick="switchInsightMode('severity')">
-                        <i class="bi bi-exclamation-triangle me-1"></i>View by Severity
+                        <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                    </button>
+                    <button class="btn btn-sm ${_insightViewMode === 'severity' ? 'btn-outline-secondary' : 'btn-info'}" onclick="switchInsightMode('checks')">
+                        <i class="bi bi-x-circle me-1"></i>PR Checks
                     </button>
                 </div>
             </div>

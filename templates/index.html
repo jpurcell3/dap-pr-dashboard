@@ -2168,13 +2168,13 @@
                     <!-- Doughnut: slightly left of center with title and legend adjacent -->
                     <div style="flex:0 0 62%; display:flex; align-items:start; justify-content:center; padding-right:12px;">
                         ${bnLabels.length > 0 ? `
-                        <div style="display:flex; flex-direction:column; align-items:center; flex:0 0 45%; max-height:320px;">
+                        <div style="display:flex; flex-direction:column; align-items:flex-start; flex:0 0 40%; max-height:280px;">
                             <h6 class="text-muted mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Bottleneck Types</h6>
-                            <div style="width:100%; position:relative; flex:1;">
+                            <div style="width:100%; position:relative; flex:1; max-height:240px;">
                                 <canvas id="chartBottleneckTypes"></canvas>
                             </div>
                         </div>
-                        <div id="bnLegendContainer" class="ms-2" style="max-width:260px; max-height:320px; overflow-y:auto; flex-shrink:0;"></div>
+                        <div id="bnLegendContainer" class="ms-2" style="max-width:260px; max-height:280px; overflow-y:auto; flex-shrink:0;"></div>
                         ` : '<p class="text-muted py-3">No bottleneck data.</p>'}
                     </div>
                     <!-- Time phases: lower right -->

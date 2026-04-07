@@ -2110,17 +2110,12 @@
             html += `
             <div class="section-card mb-3">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="btn-group" role="group">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="switchInsightMode('severity')">
-                                <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
-                            </button>
-                            <button class="btn btn-sm btn-info" onclick="switchInsightMode('checks')">
-                                <i class="bi bi-x-circle me-1"></i>PR Checks
-                            </button>
-                        </div>
-                        <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
-                            <i class="bi ${_allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul'} me-1"></i>${_allPrsShowAll ? 'Show Failures Only' : 'View All'}
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="switchInsightMode('severity')">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Bottlenecks
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="switchInsightMode('checks')">
+                            <i class="bi bi-x-circle me-1"></i>PR Checks
                         </button>
                     </div>
                     <div class="d-flex gap-3 text-end">
@@ -2129,11 +2124,17 @@
                     </div>
                 </div>
                 ${pieLabels.length > 0 ? `
+                <h6 class="text-muted mb-2"><i class="bi bi-x-circle me-1"></i>Failed Checks</h6>
                 <div class="d-flex justify-content-center align-items-start" style="min-height:260px;">
                     <div style="flex:0 0 260px; position:relative; height:260px;">
                         <canvas id="chartFailurePie"></canvas>
                     </div>
                     <div id="pieLegendContainer" class="ms-3" style="max-width:420px; max-height:260px; overflow-y:auto;"></div>
+                </div>
+                <div class="text-end mt-2">
+                    <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
+                        <i class="bi ${_allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul'} me-1"></i>${_allPrsShowAll ? 'Show Failures Only' : 'View All'}
+                    </button>
                 </div>` : '<p class="text-muted text-center py-3">No check failures found.</p>'}
             </div>`;
 
@@ -2161,22 +2162,23 @@
                         <div><span class="fw-bold" style="color:var(--accent-blue);">${lowCount}</span> <span class="text-muted small">low</span></div>
                     </div>
                 </div>
+                <h6 class="text-muted mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Bottleneck Types</h6>
                 <div class="d-flex align-items-start">
-                    <!-- Doughnut: 80% from left = 20% from right -->
-                    <div style="flex:0 0 80%; position:relative; display:flex; align-items:start;">
+                    <!-- Doughnut: slightly left of center (~45%) with legend adjacent -->
+                    <div style="flex:0 0 73%; display:flex; align-items:start; justify-content:center; padding-right:12px;">
                         ${bnLabels.length > 0 ? `
-                        <div style="flex:1; position:relative; max-height:320px;">
+                        <div style="flex:0 0 45%; position:relative; max-height:320px;">
                             <canvas id="chartBottleneckTypes"></canvas>
                         </div>
-                        <div id="bnLegendContainer" class="ms-3" style="max-width:260px; max-height:320px; overflow-y:auto; flex-shrink:0;"></div>
+                        <div id="bnLegendContainer" class="ms-2" style="max-width:260px; max-height:320px; overflow-y:auto; flex-shrink:0;"></div>
                         ` : '<p class="text-muted py-3">No bottleneck data.</p>'}
                     </div>
                     <!-- Time phases: lower right -->
                     ${hasTimingData ? `
-                    <div style="flex:0 0 20%; padding-left:12px; display:flex; flex-direction:column; justify-content:flex-end; min-height:320px;">
+                    <div style="flex:0 0 27%; padding-left:12px; display:flex; flex-direction:column; justify-content:flex-end; min-height:320px;">
                         <div>
                             <p class="text-muted small mb-1">${mergedPrs.length} merged PRs &mdash; avg hrs</p>
-                            <div style="position:relative; height:100px;">
+                            <div style="position:relative; height:190px;">
                                 <canvas id="chartTimePhases"></canvas>
                             </div>
                         </div>

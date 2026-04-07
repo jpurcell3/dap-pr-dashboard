@@ -1836,29 +1836,55 @@
      */
     const _groupLabelMap = {};  // lowercase -> first-seen casing
 
+    // Explicit exact-name overrides (lowercase key -> canonical group label).
+    // Checked first so specific names always land in the right group.
+    const _exactGroupMap = {
+        'mypi & tests':                  'mypi',
+        'mypi & lint':                   'mypi',
+        'black duck binary/docker scan': 'Blackduck',
+    };
+
     // Multi-word phrases to recognise as groups (order matters – longest first)
     const _phraseGroups = [
         'continuous integration',
         'test front end',
         'build images',
     ];
-    // Single-word keyword prefixes
+
+    // Single-word keyword prefixes.
+    // The optional second element is the canonical group label to use;
+    // if omitted the keyword itself (first-seen casing) is used.
     const _keywordPrefixes = [
-        'blackduck', 'upload', 'build', 'test', 'lint', 'deploy', 'scan',
-        'security', 'analyze', 'publish', 'release', 'validate', 'check',
-        'run', 'mypi',
+        ['blackduck', 'Blackduck'],
+        ['upload'],
+        ['build'],
+        ['tests', 'Tests'],   // "Tests*" -> Tests  (before 'test' so "Tests" matches first)
+        ['test',  'Tests'],   // "test*"  -> Tests
+        ['lint'],
+        ['deploy'],
+        ['scan'],
+        ['security'],
+        ['analyze'],
+        ['publish'],
+        ['release'],
+        ['validate'],
+        ['check'],
+        ['run'],
+        ['mypi'],
     ];
 
     function groupCheckName(name) {
         if (!name) return 'Other';
         const lower = name.toLowerCase();
 
+        // 0. Exact-name overrides
+        if (_exactGroupMap[lower]) return _exactGroupMap[lower];
+
         // 1. Multi-word phrase prefixes (case-insensitive)
         for (const phrase of _phraseGroups) {
             if (lower.startsWith(phrase)) {
-                // Accept if the name IS the phrase, or is followed by separator / space / punctuation
                 const rest = name.substring(phrase.length);
-                if (rest === '' || /^[\s\/\-_:]/.test(rest)) {
+                if (rest === '' || /^[\s\/\-_:&]/.test(rest)) {
                     const key = phrase;
                     if (!_groupLabelMap[key]) _groupLabelMap[key] = name.substring(0, phrase.length);
                     return _groupLabelMap[key];
@@ -1870,26 +1896,39 @@
         const slashIdx = name.indexOf(' / ');
         if (slashIdx > 0) {
             const prefix = name.substring(0, slashIdx).trim();
+            // Check if the prefix itself should be aliased via keyword rules
+            const aliased = _resolveKeyword(prefix.toLowerCase(), prefix);
+            if (aliased) return aliased;
             const key = prefix.toLowerCase();
             if (!_groupLabelMap[key]) _groupLabelMap[key] = prefix;
             return _groupLabelMap[key];
         }
 
         // 3. Wildcard keyword prefixes ("Upload artifact-name" -> "Upload")
-        for (const kw of _keywordPrefixes) {
-            if (lower.startsWith(kw)) {
-                const rest = name.substring(kw.length);
-                if (rest === '' || /^[\s\/\-_:]/.test(rest)) {
-                    if (!_groupLabelMap[kw]) _groupLabelMap[kw] = name.substring(0, kw.length);
-                    return _groupLabelMap[kw];
-                }
-            }
-        }
+        const kw = _resolveKeyword(lower, name);
+        if (kw) return kw;
 
         // 4. Fallback: full name is its own group
         const key = lower;
         if (!_groupLabelMap[key]) _groupLabelMap[key] = name;
         return _groupLabelMap[key];
+    }
+
+    /** Helper: check if `lower` starts with any keyword prefix and return the canonical label. */
+    function _resolveKeyword(lower, original) {
+        for (const entry of _keywordPrefixes) {
+            const kw = entry[0];
+            const canonical = entry[1] || null;  // explicit label if provided
+            if (lower.startsWith(kw)) {
+                const rest = original.substring(kw.length);
+                if (rest === '' || /^[\s\/\-_:&]/.test(rest)) {
+                    if (canonical) return canonical;
+                    if (!_groupLabelMap[kw]) _groupLabelMap[kw] = original.substring(0, kw.length);
+                    return _groupLabelMap[kw];
+                }
+            }
+        }
+        return null;
     }
 
     /**

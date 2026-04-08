@@ -1934,9 +1934,10 @@
                         label: 'Avg Cycle Time (hours)',
                         data: sorted.map(r => round(r.avg_cycle_time_hours)),
                         backgroundColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
-                        borderColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
-                        borderWidth: 1,
-                        borderRadius: 4,
+                        borderColor: document.documentElement.getAttribute('data-bs-theme') === 'light'
+                            ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)',
+                        borderWidth: { top: 1, bottom: 1, right: 2, left: 0 },
+                        borderRadius: 3,
                     }],
                 },
                 options: {

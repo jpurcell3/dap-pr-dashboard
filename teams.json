@@ -1,0 +1,16 @@
+{
+  "Davinci": [
+    "fusion-davinci-api",
+    "fusion-davinci-ui",
+    "fusion-shared-auth"
+  ],
+  "Turing": [
+    "fusion-turing-engine",
+    "fusion-turing-ml",
+    "fusion-shared-auth"
+  ],
+  "Platform": [
+    "fusion-platform-core",
+    "fusion-infra-tools"
+  ]
+}

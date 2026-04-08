@@ -8,6 +8,7 @@ GitHub / GitHub Enterprise.
 
 __version__ = "1.0.0"
 
+import json
 import logging
 import os
 import threading
@@ -200,6 +201,25 @@ def api_config():
         "max_prs_per_repo": MAX_PRS_PER_REPO,
         "env_file": str(os.path.join(os.path.dirname(__file__), ".env")),
     })
+
+
+# 1c. Teams mapping ------------------------------------------------------------
+TEAMS_FILE = os.environ.get("TEAMS_FILE", os.path.join(os.path.dirname(__file__), "teams.json"))
+
+
+def _load_teams():
+    """Load teams mapping from JSON file. Returns {} if file doesn't exist."""
+    try:
+        with open(TEAMS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+@app.route("/api/teams")
+def api_teams():
+    """Return team-to-repo mapping from teams.json."""
+    return jsonify(_load_teams())
 
 
 # 2. List repos ---------------------------------------------------------------

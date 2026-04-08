@@ -683,8 +683,14 @@
         [data-bs-theme="light"] .refresh-status-widget { background: #fff; border-color: var(--card-border); }
         [data-bs-theme="light"] .refresh-options-panel { background: #fff; border-color: var(--card-border); }
         [data-bs-theme="light"] .refresh-options-panel .form-control,
-        [data-bs-theme="light"] .refresh-options-panel .form-select { background-color: #f6f8fa; border-color: var(--card-border); color: #1f2328; }
-        [data-bs-theme="light"] .repo-checklist { background: #f6f8fa; border-color: var(--card-border); }
+        [data-bs-theme="light"] .refresh-options-panel .form-select { background-color: #f6f8fa; border-color: #d0d7de; color: #1f2328; }
+        [data-bs-theme="light"] .refresh-options-panel .form-control::placeholder { color: #6e7781; }
+        [data-bs-theme="light"] .refresh-options-panel .input-group-text { background: #f6f8fa; border-color: #d0d7de; color: #656d76; }
+        [data-bs-theme="light"] .repo-checklist { background: #f6f8fa; border-color: #d0d7de; }
+        [data-bs-theme="light"] .repo-checklist .form-check-label { color: #1f2328; }
+        [data-bs-theme="light"] .repo-checklist .form-check-input { background-color: #fff; border-color: #d0d7de; }
+        [data-bs-theme="light"] .repo-checklist .form-check:hover { background: rgba(84,174,255,0.08); }
+        [data-bs-theme="light"] .date-pills .btn { color: #656d76; border-color: #d0d7de; }
         [data-bs-theme="light"] .filter-bar .form-select,
         [data-bs-theme="light"] .filter-bar .form-control { background-color: #fff; border-color: var(--card-border); color: #1f2328; }
         [data-bs-theme="light"] .bottleneck-alert.severity-high { background-color: rgba(207, 34, 46, 0.08); }
@@ -713,8 +719,8 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 8px;
-            padding: 1rem;
-            width: 360px;
+            padding: 1.25rem;
+            width: 380px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         }
         .refresh-options-panel label {
@@ -725,9 +731,9 @@
         }
         .refresh-options-panel .form-control,
         .refresh-options-panel .form-select {
-            background-color: #0d1117;
-            border: 1px solid var(--card-border);
-            color: var(--bs-body-color);
+            background-color: #161b22;
+            border: 1px solid #3d444d;
+            color: #f0f6fc;
             font-size: 0.85rem;
         }
         .refresh-options-panel .form-control:focus,
@@ -735,27 +741,49 @@
             border-color: var(--accent-blue);
             box-shadow: 0 0 0 0.2rem rgba(88,166,255,0.15);
         }
+        .refresh-options-panel .form-control::placeholder {
+            color: #6e7681;
+        }
         /* Dark-theme date input icon fix */
         .refresh-options-panel input[type="date"]::-webkit-calendar-picker-indicator {
             filter: invert(0.8);
             cursor: pointer;
         }
+        /* Date quick-select pills */
+        .date-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+        .date-pills .btn {
+            font-size: 0.7rem; padding: 2px 8px; border-radius: 12px;
+            color: #8b949e; border-color: #3d444d;
+        }
+        .date-pills .btn:hover, .date-pills .btn.active {
+            background: var(--accent-blue); color: #fff; border-color: var(--accent-blue);
+        }
         .repo-checklist {
-            max-height: 180px;
+            max-height: 200px;
             overflow-y: auto;
-            border: 1px solid var(--card-border);
+            border: 1px solid #3d444d;
             border-radius: 6px;
-            background: #0d1117;
+            background: #161b22;
         }
         .repo-checklist .form-check {
-            padding: 0.35rem 0.75rem 0.35rem 2rem;
+            padding: 0.4rem 0.75rem 0.4rem 2.2rem;
             margin: 0;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            transition: background 0.15s;
         }
+        .repo-checklist .form-check:hover { background: rgba(88,166,255,0.06); }
         .repo-checklist .form-check:last-child { border-bottom: none; }
-        .repo-checklist .form-check-label { color: var(--bs-body-color); font-size: 0.85rem; cursor: pointer; }
-        .repo-checklist .form-check-input { background-color: #0d1117; border-color: var(--card-border); }
-        .repo-checklist .form-check-input:checked { background-color: var(--accent-blue); border-color: var(--accent-blue); }
+        .repo-checklist .form-check-label { color: #e6edf3; font-size: 0.85rem; cursor: pointer; }
+        .repo-checklist .form-check-input {
+            background-color: #161b22; border: 2px solid #6e7681;
+            width: 1.1em; height: 1.1em; margin-top: 0.15em;
+        }
+        .repo-checklist .form-check-input:checked {
+            background-color: var(--accent-blue); border-color: var(--accent-blue);
+        }
+        .repo-checklist .form-check-input:focus {
+            box-shadow: 0 0 0 0.2rem rgba(88,166,255,0.25);
+        }
     </style>
 </head>
 <body>
@@ -830,28 +858,46 @@
                             <div class="refresh-options-panel">
                                 <h6 class="mb-3" style="color:#f0f6fc;"><i class="bi bi-sliders me-1"></i>Refresh Options</h6>
 
-                                <!-- Date range -->
+                                <!-- Date range with quick-select pills -->
                                 <label class="form-label mb-1">Date Range</label>
-                                <div class="input-group input-group-sm mb-2">
-                                    <span class="input-group-text" style="background:#0d1117;border-color:var(--card-border);color:#8b949e;">From</span>
-                                    <input type="date" class="form-control" id="filterSince">
+                                <div class="date-pills mb-2">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(7)">7d</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(30)">30d</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(60)">60d</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(90)">90d</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(180)">6mo</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setDateRange(365)">1yr</button>
                                 </div>
-                                <div class="input-group input-group-sm mb-3">
-                                    <span class="input-group-text" style="background:#0d1117;border-color:var(--card-border);color:#8b949e;">To</span>
-                                    <input type="date" class="form-control" id="filterUntil">
+                                <div class="d-flex gap-2 mb-3">
+                                    <div class="flex-fill">
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text" style="background:#161b22;border-color:#3d444d;color:#8b949e;font-size:0.75rem;">From</span>
+                                            <input type="date" class="form-control" id="filterSince">
+                                        </div>
+                                    </div>
+                                    <div class="flex-fill">
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text" style="background:#161b22;border-color:#3d444d;color:#8b949e;font-size:0.75rem;">To</span>
+                                            <input type="date" class="form-control" id="filterUntil">
+                                        </div>
+                                    </div>
                                 </div>
+
+                                <!-- Team selector -->
+                                <label class="form-label mb-1">Team</label>
+                                <select class="form-select form-select-sm mb-2" id="teamSelect" onchange="selectTeam(this.value)">
+                                    <option value="">All Repos</option>
+                                </select>
 
                                 <!-- Repo selection -->
                                 <label class="form-label mb-1">Repositories</label>
                                 <div class="mb-2">
                                     <input type="text" class="form-control form-control-sm mb-2" id="repoSearch"
                                            placeholder="Search repos..." autocomplete="off"
-                                           oninput="filterRepoChecklist(this.value)"
-                                           style="background:#0d1117;border-color:var(--card-border);color:#f0f6fc;">
+                                           oninput="filterRepoChecklist(this.value)">
                                     <div class="d-flex gap-2 mb-1">
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(true)">Select All</button>
                                         <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" onclick="toggleAllRepos(false)">Clear All</button>
-                                        <button class="btn btn-outline-info btn-sm flex-fill" type="button" onclick="selectSyncedRepos()">Select Synced</button>
                                     </div>
                                     <div class="repo-checklist" id="repoChecklist">
                                         <div class="text-muted text-center py-2" style="font-size:0.8rem;">Loading repos...</div>
@@ -1574,8 +1620,65 @@
         document.getElementById('filterSince').value = '';
         document.getElementById('filterUntil').value = '';
         document.getElementById('repoSearch').value = '';
+        document.getElementById('teamSelect').value = '';
         filterRepoChecklist('');
         toggleAllRepos(false);
+        // Reset date pill active state
+        document.querySelectorAll('.date-pills .btn').forEach(b => b.classList.remove('active'));
+    }
+
+    /** Quick-select date range (N days back from today) */
+    function setDateRange(days) {
+        const now = new Date();
+        const from = new Date();
+        from.setDate(now.getDate() - days);
+        document.getElementById('filterSince').value = from.toISOString().slice(0, 10);
+        document.getElementById('filterUntil').value = now.toISOString().slice(0, 10);
+        // Highlight active pill
+        document.querySelectorAll('.date-pills .btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.textContent) === days ||
+                (days === 180 && b.textContent === '6mo') ||
+                (days === 365 && b.textContent === '1yr'));
+        });
+    }
+
+    /** Team-to-repo mapping loaded from /api/teams */
+    let _teamsMap = {};
+
+    /** Load teams from backend and populate the dropdown */
+    async function loadTeams() {
+        try {
+            _teamsMap = await apiFetch('/api/teams');
+            const sel = document.getElementById('teamSelect');
+            if (!sel) return;
+            const teamNames = Object.keys(_teamsMap).sort();
+            if (teamNames.length === 0) {
+                // No teams configured — hide the team selector
+                sel.closest('label')?.style && (sel.previousElementSibling.style.display = 'none');
+                sel.style.display = 'none';
+                return;
+            }
+            sel.innerHTML = '<option value="">All Repos</option>' +
+                teamNames.map(t => `<option value="${t}">${t} (${_teamsMap[t].length})</option>`).join('');
+        } catch (e) {
+            console.warn('Could not load teams:', e);
+        }
+    }
+
+    /** Select a team — check matching repos, uncheck others */
+    function selectTeam(teamName) {
+        if (!teamName) {
+            // "All Repos" selected — clear checks
+            toggleAllRepos(false);
+            return;
+        }
+        const teamRepos = new Set((_teamsMap[teamName] || []).map(r => r.toLowerCase()));
+        // Show all repos (clear search) so the checks are visible
+        document.getElementById('repoSearch').value = '';
+        filterRepoChecklist('');
+        document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => {
+            cb.checked = teamRepos.has(cb.value.toLowerCase());
+        });
     }
 
     /** Populate the repo checklist from state.repoList (objects with priority metadata) */
@@ -3878,8 +3981,9 @@
         d.setDate(d.getDate() - 30);
         document.getElementById('filterSince').value = d.toISOString().slice(0, 10);
 
-        // Load repo list for filter dropdown (non-blocking)
+        // Load repo list and teams for filter dropdown (non-blocking)
         loadRepoList();
+        loadTeams();
 
         // Check if a refresh is already running (e.g., from a previous session)
         checkAndResumeRefresh();

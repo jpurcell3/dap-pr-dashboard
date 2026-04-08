@@ -1215,6 +1215,33 @@
         return truncate(result, 500);
     }
 
+    /** Parse DRP Checkers output and return HTML showing only the failed sub-checks.
+     *  Looks for lines with cross/fail markers (❌ ✖ etc.) followed by a component name.
+     *  Returns a styled list of failed components, or falls back to filterFailureLines. */
+    function formatDrpFailedChecks(text) {
+        if (!text) return '';
+        const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+        const failRe = /(\u274C|\u274E|\u2716|\u2718|:x:|:cross_mark:|:heavy_multiplication_x:|❌|⛔|\u26D4)/;
+        const passRe = /(\u2705|\u2714|\u2713|:white_check_mark:|:heavy_check_mark:|:check:|✔️|☑️|\u2611)/;
+        // Extract component lines (lines that start with a tick/cross marker)
+        const componentLines = lines.filter(l => failRe.test(l) || passRe.test(l));
+        if (componentLines.length === 0) return esc(filterFailureLines(text));
+        const failedComponents = componentLines
+            .filter(l => failRe.test(l))
+            .map(l => l.replace(failRe, '').replace(/^\s*[-|:]\s*/, '').trim())
+            .filter(Boolean);
+        if (failedComponents.length === 0) return '';
+        return '<span class="text-danger" style="font-size:0.78rem;">Failed: </span>' +
+            failedComponents.map(name =>
+                `<span class="badge bg-danger bg-opacity-25 text-danger me-1" style="font-size:0.75rem;">${esc(name)}</span>`
+            ).join('');
+    }
+
+    /** Check if a check name looks like a DRP Checkers aggregate check */
+    function isDrpChecker(name) {
+        return /drp.check/i.test(name);
+    }
+
     /** Generic Chart.js default options for dark theme */
     function chartDefaults() {
         return {
@@ -3475,7 +3502,9 @@
                                 ${c.conclusion === 'failure' && (c.output_title || c.output_summary) ? `
                                     <div class="check-failure-detail">
                                         ${c.output_title ? `<strong>${esc(c.output_title)}</strong>` : ''}
-                                        ${c.output_summary ? `<span class="ms-1">${esc(filterFailureLines(c.output_summary))}</span>` : ''}
+                                        ${c.output_summary ? (isDrpChecker(c.name)
+                                            ? formatDrpFailedChecks(c.output_summary)
+                                            : `<span class="ms-1">${esc(filterFailureLines(c.output_summary))}</span>`) : ''}
                                     </div>` : ''}
                             `).join('')}
                             ${hiddenCount > 0 ? `

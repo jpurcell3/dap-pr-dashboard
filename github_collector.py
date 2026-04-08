@@ -583,8 +583,9 @@ def fetch_commit_checks(
                 check_name = cr.get("name", "")
                 raw_summary = (cr.get("output") or {}).get("summary", "")
                 raw_title = (cr.get("output") or {}).get("title", "")
-                # Twistlock: extract only the Scan Summary, discard boilerplate.
-                if check_name.lower() == "twistlock":
+                # Twistlock, Secrets Scanner, checkmarx: extract only the
+                # Scan Summary / Recommended Action, discard boilerplate.
+                if check_name.lower() in ("twistlock", "secrets scanner", "checkmarx"):
                     summary_text = _extract_twistlock_summary(raw_summary)
                 else:
                     summary_text = _strip_html(raw_summary)

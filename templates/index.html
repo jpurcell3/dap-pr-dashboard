@@ -2103,6 +2103,36 @@
             'rgba(219, 107, 142, 0.85)','rgba(110, 135, 206, 0.85)',
         ];
 
+        // --- Check time impact aggregation ---
+        // Per-group: total failed time, total passed time, count of PRs affected
+        const checkTimeByGroup = {};
+        let totalFailedTime = 0, totalPassedTime = 0, prsWithTimedFailures = 0;
+        allPrs.forEach(pr => {
+            const durations = pr.check_durations || [];
+            let prHasFailedTime = false;
+            durations.forEach(d => {
+                const group = groupCheckName(d.name);
+                if (!checkTimeByGroup[group]) checkTimeByGroup[group] = { failed: 0, passed: 0, failedCount: 0, passedCount: 0 };
+                const isFailed = ['failure','cancelled','timed_out','action_required'].includes(d.conclusion);
+                if (isFailed) {
+                    checkTimeByGroup[group].failed += d.duration_hours;
+                    checkTimeByGroup[group].failedCount++;
+                    totalFailedTime += d.duration_hours;
+                    prHasFailedTime = true;
+                } else {
+                    checkTimeByGroup[group].passed += d.duration_hours;
+                    checkTimeByGroup[group].passedCount++;
+                    totalPassedTime += d.duration_hours;
+                }
+            });
+            if (prHasFailedTime) prsWithTimedFailures++;
+        });
+        // Sort groups by failed time descending
+        const timeImpactGroups = Object.keys(checkTimeByGroup)
+            .filter(g => checkTimeByGroup[g].failed > 0)
+            .sort((a, b) => checkTimeByGroup[b].failed - checkTimeByGroup[a].failed);
+        const hasTimeImpact = timeImpactGroups.length > 0;
+
         const hasChartData = pieLabels.length > 0 || bnLabels.length > 0 || hasTimingData;
         const checksActive = _insightViewMode !== 'severity';
 
@@ -2140,6 +2170,19 @@
                     </div>
                     <div id="pieLegendContainer" class="ms-3" style="max-width:420px; max-height:260px; overflow-y:auto;"></div>
                 </div>
+                ${hasTimeImpact ? `
+                <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,0.08);">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-muted mb-0"><i class="bi bi-clock-history me-1"></i>Failure Time Impact</h6>
+                        <div class="d-flex gap-3">
+                            <span class="text-danger small fw-bold">${totalFailedTime.toFixed(1)} hrs</span>
+                            <span class="text-muted small">wasted on failed checks across ${prsWithTimedFailures} PRs</span>
+                        </div>
+                    </div>
+                    <div style="position:relative; height:${Math.max(120, timeImpactGroups.length * 32 + 40)}px;">
+                        <canvas id="chartTimeImpact"></canvas>
+                    </div>
+                </div>` : ''}
                 <div class="text-end mt-2">
                     <button class="btn btn-sm btn-outline-info" onclick="toggleAllPrsMode()">
                         <i class="bi ${_allPrsShowAll ? 'bi-funnel-fill' : 'bi-list-ul'} me-1"></i>${_allPrsShowAll ? 'Show Failures Only' : 'View All'}
@@ -2275,6 +2318,56 @@
                     </div>`;
                 }).join('');
             }
+        }
+
+        // 2b. Failure time impact horizontal bar chart – only in checks mode
+        if (checksActive && hasTimeImpact) {
+            destroyChart('chartTimeImpact');
+            const ctxImpact = document.getElementById('chartTimeImpact').getContext('2d');
+            const impactLabels = timeImpactGroups;
+            const failedHrs = impactLabels.map(g => +checkTimeByGroup[g].failed.toFixed(2));
+            const passedHrs = impactLabels.map(g => +checkTimeByGroup[g].passed.toFixed(2));
+            state.charts['chartTimeImpact'] = new Chart(ctxImpact, {
+                type: 'bar',
+                data: {
+                    labels: impactLabels,
+                    datasets: [
+                        { label: 'Failed (hrs)', data: failedHrs, backgroundColor: 'rgba(248, 81, 73, 0.85)', borderRadius: 3 },
+                        { label: 'Passed (hrs)', data: passedHrs, backgroundColor: 'rgba(63, 185, 80, 0.55)', borderRadius: 3 },
+                    ],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 12 } },
+                            ticks: { color: '#8b949e', font: { size: 11 } },
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                        },
+                        y: {
+                            stacked: true,
+                            ticks: { color: '#c9d1d9', font: { size: 13 } },
+                            grid: { display: false },
+                        },
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#c9d1d9', font: { size: 11 }, boxWidth: 12 } },
+                        tooltip: {
+                            ...defaults.plugins.tooltip,
+                            callbacks: {
+                                label: ctx => {
+                                    const g = ctx.label;
+                                    const info = checkTimeByGroup[g];
+                                    if (ctx.datasetIndex === 0) return `Failed: ${ctx.parsed.x.toFixed(2)} hrs (${info.failedCount} runs)`;
+                                    return `Passed: ${ctx.parsed.x.toFixed(2)} hrs (${info.passedCount} runs)`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
         }
 
         // 3. Bottleneck types (doughnut) – only in severity mode, custom legend on right

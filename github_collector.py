@@ -595,6 +595,8 @@ def fetch_commit_checks(
                     "name": check_name,
                     "status": cr.get("status", ""),
                     "conclusion": conclusion,
+                    "started_at": cr.get("started_at", ""),
+                    "completed_at": cr.get("completed_at", ""),
                     "details_url": cr.get("details_url") or cr.get("html_url", ""),
                     "output_title": output_title,
                     "output_summary": summary_text,

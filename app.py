@@ -568,6 +568,36 @@ def api_all_prs():
                 if c["conclusion"] in ("failure", "cancelled", "timed_out", "action_required")
             })
 
+            # --- Check timing metrics ---
+            # Compute duration (hours) for each check run that has timestamps
+            check_durations = []   # [{name, conclusion, duration_hours}, ...]
+            failed_check_time_hours = 0.0   # total hours spent on failed checks
+            passed_check_time_hours = 0.0   # total hours spent on passed checks
+            for c in check_runs:
+                sa = c.get("started_at", "")
+                ca = c.get("completed_at", "")
+                if sa and ca:
+                    try:
+                        t_start = datetime.fromisoformat(sa.replace("Z", "+00:00"))
+                        t_end = datetime.fromisoformat(ca.replace("Z", "+00:00"))
+                        dur_hrs = round((t_end - t_start).total_seconds() / 3600, 3)
+                    except (ValueError, TypeError):
+                        dur_hrs = None
+                else:
+                    dur_hrs = None
+                cname = c.get("name", "")
+                conc = c.get("conclusion", "")
+                if dur_hrs is not None:
+                    check_durations.append({
+                        "name": cname,
+                        "conclusion": conc,
+                        "duration_hours": dur_hrs,
+                    })
+                    if conc in ("failure", "cancelled", "timed_out", "action_required"):
+                        failed_check_time_hours += dur_hrs
+                    else:
+                        passed_check_time_hours += dur_hrs
+
             all_prs.append({
                 "repo": repo_name,
                 "number": pr.get("number"),
@@ -587,6 +617,10 @@ def api_all_prs():
                 "checks_overall": checks_raw.get("overall_state", "unknown"),
                 "check_names": check_names,
                 "failed_checks": failed_checks,
+                "check_durations": check_durations,
+                "failed_check_time_hours": round(failed_check_time_hours, 3),
+                "passed_check_time_hours": round(passed_check_time_hours, 3),
+                "total_check_time_hours": round(failed_check_time_hours + passed_check_time_hours, 3),
             })
 
     # Sort by created_at descending

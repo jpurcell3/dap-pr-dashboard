@@ -675,6 +675,7 @@
         [data-bs-theme="light"] .navbar-custom .nav-link { color: #656d76; }
         [data-bs-theme="light"] .navbar-custom .nav-link:hover,
         [data-bs-theme="light"] .navbar-custom .nav-link.active { color: #1f2328; background-color: var(--hover-bg); }
+        [data-bs-theme="light"] #navTeamSelect { background-color: #f6f8fa; border-color: #d0d7de; color: #1f2328; }
         [data-bs-theme="light"] .stat-card { background-color: var(--card-bg); border-color: var(--card-border); }
         [data-bs-theme="light"] .section-card { background-color: var(--card-bg); border-color: var(--card-border); }
         [data-bs-theme="light"] .section-card h5 { color: #1f2328; }
@@ -846,6 +847,10 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center gap-3">
+                    <select class="form-select form-select-sm" id="navTeamSelect" onchange="selectTeam(this.value)"
+                            style="width:auto; min-width:130px; background-color:#161b22; border-color:#3d444d; color:#c9d1d9; font-size:0.8rem;">
+                        <option value="">All Repos</option>
+                    </select>
                     <button class="theme-toggle" id="btnThemeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">
                         <i class="bi bi-moon-stars-fill" id="themeIcon"></i>
                     </button>
@@ -1477,12 +1482,20 @@
         }
 
         // Default to synced repos only (those with has_data === true)
+        // When a team is active, restrict to that team's repos
         if (!options.repos) {
-            const syncedRepos = (state.repoList || [])
+            let candidates = (state.repoList || [])
                 .filter(r => typeof r === 'object' && r.has_data)
                 .map(r => r.name);
-            if (syncedRepos.length > 0) {
-                options.repos = syncedRepos;
+            if (_activeTeamRepos) {
+                candidates = candidates.filter(n => _activeTeamRepos.has(n.toLowerCase()));
+                // If no team repos are synced yet, sync all team repos
+                if (candidates.length === 0) {
+                    candidates = _teamsMap[_activeTeam] || [];
+                }
+            }
+            if (candidates.length > 0) {
+                options.repos = candidates;
             }
             Object.assign(options, getDateRangeOptions());
         }
@@ -1721,41 +1734,68 @@
 
     /** Team-to-repo mapping loaded from /api/teams */
     let _teamsMap = {};
+    /** Currently active team filter (null = all repos) */
+    let _activeTeam = null;
+    /** Set of lowercase repo names for the active team (null = no filter) */
+    let _activeTeamRepos = null;
 
-    /** Load teams from backend and populate the dropdown */
+    /** Check if a repo name passes the active team filter */
+    function isRepoInActiveTeam(repoName) {
+        if (!_activeTeamRepos) return true;
+        return _activeTeamRepos.has((repoName || '').toLowerCase());
+    }
+
+    /** Load teams from backend and populate the dropdown(s) */
     async function loadTeams() {
         try {
             _teamsMap = await apiFetch('/api/teams');
-            const sel = document.getElementById('teamSelect');
-            if (!sel) return;
             const teamNames = Object.keys(_teamsMap).sort();
-            if (teamNames.length === 0) {
-                // No teams configured — hide the team selector
-                sel.closest('label')?.style && (sel.previousElementSibling.style.display = 'none');
-                sel.style.display = 'none';
-                return;
-            }
-            sel.innerHTML = '<option value="">All Repos</option>' +
+            const optionsHtml = '<option value="">All Repos</option>' +
                 teamNames.map(t => `<option value="${t}">${t} (${_teamsMap[t].length})</option>`).join('');
+            // Populate both nav bar and dropdown selectors
+            ['navTeamSelect', 'teamSelect'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                if (teamNames.length === 0) {
+                    sel.style.display = 'none';
+                    const lbl = sel.previousElementSibling;
+                    if (lbl && lbl.tagName === 'LABEL') lbl.style.display = 'none';
+                    return;
+                }
+                sel.innerHTML = optionsHtml;
+            });
         } catch (e) {
             console.warn('Could not load teams:', e);
         }
     }
 
-    /** Select a team — check matching repos, uncheck others */
+    /** Select a team — sets global filter, updates checklist, reloads current view */
     function selectTeam(teamName) {
-        if (!teamName) {
-            // "All Repos" selected — clear checks
-            toggleAllRepos(false);
-            return;
-        }
-        const teamRepos = new Set((_teamsMap[teamName] || []).map(r => r.toLowerCase()));
-        // Show all repos (clear search) so the checks are visible
-        document.getElementById('repoSearch').value = '';
-        filterRepoChecklist('');
-        document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => {
-            cb.checked = teamRepos.has(cb.value.toLowerCase());
+        _activeTeam = teamName || null;
+        _activeTeamRepos = teamName
+            ? new Set((_teamsMap[teamName] || []).map(r => r.toLowerCase()))
+            : null;
+
+        // Keep both selectors in sync
+        ['navTeamSelect', 'teamSelect'].forEach(id => {
+            const sel = document.getElementById(id);
+            if (sel) sel.value = teamName || '';
         });
+
+        // Repopulate the repo checklist (filtered to team repos)
+        populateRepoChecklist();
+        // Auto-check all visible team repos
+        if (_activeTeamRepos) {
+            document.querySelectorAll('#repoChecklist .form-check-input').forEach(cb => {
+                cb.checked = true;
+            });
+        }
+
+        // Clear cached data so views reload with the filter applied
+        state.cachedSummary = null;
+
+        // Reload the current view
+        handleRoute();
     }
 
     /** Populate the repo checklist from state.repoList (objects with priority metadata) */
@@ -1766,9 +1806,22 @@
             return;
         }
 
-        const overflowCount = Math.max(0, state.repoList.length - REPO_VISIBLE_LIMIT);
+        // When a team is active, show only that team's repos
+        const filteredList = _activeTeamRepos
+            ? state.repoList.filter(r => {
+                const name = typeof r === 'string' ? r : r.name;
+                return _activeTeamRepos.has(name.toLowerCase());
+            })
+            : state.repoList;
 
-        container.innerHTML = state.repoList.map((repo, idx) => {
+        if (filteredList.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.8rem;">No repos match this team</div>';
+            return;
+        }
+
+        const overflowCount = Math.max(0, filteredList.length - REPO_VISIBLE_LIMIT);
+
+        container.innerHTML = filteredList.map((repo, idx) => {
             const name = typeof repo === 'string' ? repo : repo.name;
             const hasData = (typeof repo === 'object') ? repo.has_data : false;
             const prefixMatch = (typeof repo === 'object') ? repo.prefix_match : false;
@@ -1860,36 +1913,37 @@
             }
 
             const data = state.cachedSummary;
-            const overview = data.overview || {};
-            const allRepos = data.repo_summaries || [];
+            const allRepos = (data.repo_summaries || [])
+                .filter(r => isRepoInActiveTeam(r.repo || r.repo_name || r.name));
             // Only show repos that have PR data
             const repos = allRepos.filter(r => (r.total_prs || 0) > 0);
 
+            // Recompute overview stats from filtered repos
+            const totalRepos = repos.length;
+            const totalPRs = repos.reduce((s, r) => s + (r.total_prs || 0), 0);
+            const totalMerged = repos.reduce((s, r) => s + (r.merged || r.merged_prs || 0), 0);
+            const totalOpen = repos.reduce((s, r) => s + (r.open || r.open_prs || 0), 0);
+            const avgCycle = repos.length ? round(repos.reduce((s, r) => s + (r.avg_cycle_time_hours || 0), 0) / repos.length) : 0;
+
             // If no repos have data, show an empty state
             if (repos.length === 0) {
+                const teamHint = _activeTeam ? ` in team <strong>${esc(_activeTeam)}</strong>` : '';
                 container.innerHTML = `
                     <div class="section-card text-center py-5">
                         <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
                         <h5 class="mt-3" style="color: #f0f6fc;">No PR Data Available</h5>
                         <p class="text-muted">
                             ${allRepos.length > 0
-                                ? allRepos.length + ' repos discovered, but none have PR data yet.'
-                                : 'No repositories found.'}
-                            Click <strong>Refresh Data</strong> to fetch pull requests.
+                                ? allRepos.length + ' repos discovered' + teamHint + ', but none have PR data yet.'
+                                : 'No repositories found' + teamHint + '.'}
+                            Click <strong>Sync</strong> to fetch pull requests.
                         </p>
                         <button class="btn btn-info btn-sm mt-2" onclick="refreshData()">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh Data
+                            <i class="bi bi-arrow-clockwise me-1"></i>Sync
                         </button>
                     </div>`;
                 return;
             }
-
-            // Build summary cards
-            const totalRepos = repos.length;
-            const totalPRs = overview.total_prs || repos.reduce((s, r) => s + (r.total_prs || 0), 0);
-            const totalMerged = overview.total_merged || repos.reduce((s, r) => s + (r.merged || r.merged_prs || 0), 0);
-            const totalOpen = overview.total_open || repos.reduce((s, r) => s + (r.open || r.open_prs || 0), 0);
-            const avgCycle = overview.avg_cycle_time || (repos.length ? round(repos.reduce((s, r) => s + (r.avg_cycle_time_hours || 0), 0) / repos.length) : 0);
 
             let html = `
                 <!-- Summary Cards -->
@@ -2208,8 +2262,9 @@
                 apiFetch('/api/prs?limit=500'),
                 apiFetch('/api/bottlenecks'),
             ]);
-            _allPrsData = prs;
-            _bottleneckData = bnRaw.bottlenecks || bnRaw || [];
+            _allPrsData = prs.filter(p => isRepoInActiveTeam(p.repo));
+            const bnAll = bnRaw.bottlenecks || bnRaw || [];
+            _bottleneckData = bnAll.filter(b => isRepoInActiveTeam(b.repo));
             renderInsightView(container);
         } catch (err) {
             container.innerHTML = `

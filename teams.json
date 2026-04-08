@@ -1,15 +1,16 @@
 {
   "Davinci": [
-    "fusion-davinci-api",
-    "fusion-davinci-ui",
-    "fusion-shared-auth"
+    "fusion-manager",
+    "fusion-stage",
+    "fusion-common",
+    "fusion-agent",
+    "fusion-cli",
+    "fusion-deployments-service"
   ],
   "Turing": [
-    "fusion-turing-engine",
-    "fusion-turing-ml",
-    "fusion-shared-auth"
+    "hzp-drift-svc"
   ],
-  "Platform": [
+  "InfraFleet": [
     "fusion-platform-core",
     "fusion-infra-tools"
   ]

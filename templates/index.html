@@ -205,6 +205,14 @@
             text-align: right;
         }
 
+        /* Compact the relocated search & length controls */
+        #allPrsSearchSlot .dataTables_filter { display: inline-block; }
+        #allPrsSearchSlot .dataTables_filter input { height: 31px; font-size: 0.85rem; }
+        .dataTables_wrapper .d-flex .dataTables_length { margin-bottom: 0; }
+        .dataTables_wrapper .d-flex .dataTables_length label { margin-bottom: 0; white-space: nowrap; }
+        .dataTables_wrapper .d-flex .dataTables_length select { height: 31px; padding: 0.2rem 0.5rem !important; }
+        .dataTables_wrapper .d-flex .dataTables_info { margin-bottom: 0; white-space: nowrap; padding-top: 0 !important; }
+
         /* Badges */
         .badge-severity-high {
             background-color: var(--accent-red);
@@ -2729,7 +2737,8 @@
                             <button class="btn btn-outline-secondary btn-sm" onclick="clearAllPrsCheckFilter()" style="height:31px;">
                                 <i class="bi bi-x-circle me-1"></i>Clear
                             </button>
-                            <small class="text-muted ms-auto" id="allPrsFilterCount"></small>
+                            <div id="allPrsSearchSlot" class="ms-auto" style="min-width:180px;"></div>
+                            <small class="text-muted" id="allPrsFilterCount"></small>
                             <button class="btn btn-outline-secondary btn-sm ms-2" onclick="exportTableCSV('tableAllPrs','pr_checks')" title="Export CSV" style="height:31px;"><i class="bi bi-download me-1"></i>CSV</button>
                         </div>
 
@@ -2793,10 +2802,21 @@
             pageLength: 25,
             order: [[6, 'desc']],  // sort by # Groups descending
             language: { search: '', searchPlaceholder: 'Search PRs...' },
-            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+            dom: "<'d-none'f>" +
                  "<'row'<'col-sm-12'tr>>" +
-                 "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+                 "<'row mt-2'<'col-sm-12 d-flex align-items-center gap-3'lip>>",
         });
+        // Relocate search box into the filter bar
+        const dtWrapper = $('#tableAllPrs').closest('.dataTables_wrapper');
+        const searchSlot = document.getElementById('allPrsSearchSlot');
+        if (searchSlot) {
+            const filterDiv = dtWrapper.find('.dataTables_filter');
+            filterDiv.css({ 'text-align': 'right', 'margin': '0' });
+            searchSlot.appendChild(filterDiv[0]);
+        }
+        // Style the bottom bar: length + info inline, pagination right
+        const bottomRow = dtWrapper.find('.dataTables_info').closest('.d-flex');
+        bottomRow.find('.dataTables_paginate').addClass('ms-auto');
     }
 
     /** Custom DataTables filter function for check group/name filters */

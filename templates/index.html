@@ -1845,7 +1845,7 @@
                         tooltip: {
                             ...defaults.plugins.tooltip,
                             callbacks: {
-                                label: ctx => `${fmtDuration(ctx.parsed.x)} (${ctx.parsed.x}h)`,
+                                label: ctx => `${fmtDuration(ctx.parsed.x)} (${ctx.parsed.x}h) — ${sorted[ctx.dataIndex].total_prs || 0} PRs`,
                             },
                         },
                     },

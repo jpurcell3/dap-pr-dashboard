@@ -2572,12 +2572,15 @@
                                         <th>State</th>
                                         <th>Failed Checks</th>
                                         <th>Count</th>
+                                        <th>Failed Time</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${displayPrs.map((pr, idx) => {
                                         const gf = pr._groupedFailed || [];
                                         const gfStr = gf.join(', ');
+                                        const failTime = pr.failed_check_time_hours || 0;
+                                        const failTimeStr = failTime > 0 ? (failTime < 1 ? (failTime * 60).toFixed(0) + 'm' : failTime.toFixed(1) + 'h') : '--';
                                         return `
                                     <tr onclick="navigate('#pr/${encodeURIComponent(pr.repo)}/${pr.number}')" data-pr-idx="${idx}">
                                         <td><span class="repo-name-link" onclick="event.stopPropagation(); navigate('#repo/${encodeURIComponent(pr.repo)}')">${esc(pr.repo)}</span></td>
@@ -2594,6 +2597,11 @@
                                             ${gf.length > 0
                                                 ? `<span class="badge bg-danger">${gf.length}</span>`
                                                 : '<span class="text-muted">0</span>'}
+                                        </td>
+                                        <td data-order="${failTime}">
+                                            ${failTime > 0
+                                                ? `<span class="text-danger small fw-bold">${failTimeStr}</span>`
+                                                : '<span class="text-muted small">--</span>'}
                                         </td>
                                     </tr>`;
                                     }).join('')}

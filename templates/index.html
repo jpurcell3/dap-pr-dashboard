@@ -2923,9 +2923,8 @@
         const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
         if (!filterVal && !checkResult) return true;
 
-        const row = settings.aoData[dataIndex]?.nTr;
-        const idx = row ? parseInt(row.dataset.prIdx, 10) : -1;
-        const pr = _allPrsDisplayData[idx];
+        // dataIndex maps 1:1 with _allPrsDisplayData (rows are generated in order)
+        const pr = _allPrsDisplayData[dataIndex];
         if (!pr) return false;
 
         const prCheckNames = pr.check_names || [];

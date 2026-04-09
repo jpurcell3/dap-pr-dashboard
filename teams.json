@@ -3,15 +3,48 @@
     "fusion-manager",
     "fusion-stage",
     "fusion-common",
+    "fusion-services-common",
     "fusion-agent",
-    "fusion-cli",
-    "fusion-deployments-service"
+    "fusion-agent-service",
+    "fusion-blueprint-service",
+    "fusion-plugins-service",
+    "fusion-secrets-service",
+    "fusion-stage-backend",
+    "dsp-fusion-manager-restservice"
   ],
-  "Turing": [
-    "hzp-drift-svc"
+  "Catalog": [
+    "dsp-catalog-svc",
+    "hzp-catalog-svc",
+    "dsp-catalog-gui"
   ],
   "InfraFleet": [
-    "fusion-platform-core",
-    "fusion-infra-tools"
+    "hzp-inventory",
+    "hzp-multi-cloud-lib",
+    "dap-go-commons",
+    "hzp-upgrade-svc",
+    "hzp-job-svc",
+    "hzp-eo-initialization-svc",
+    "hzp-rules-svc",
+    "hzp-scheduler-svc",
+    "hzp-oxy-proxy-svc",
+    "hzp-fido-owner-reseller"
+  ],
+  "Portal": [
+    "dsp-iam-gui",
+    "dsp-security-gui",
+    "dsp-portal-gui",
+    "dsp-event-svc",
+    "dsp-iam-org-svc",
+    "hzp-tags-svc",
+    "hzp-event-svc",
+    "dsp-notification-svc",
+    "hzp-notification-svc",
+    "dsp-inventory-gui",
+    "dsp-services-gui",
+    "dsp-agreement-svc"
+  ],
+  "Turing": [
+    "hzp-drift-svc",
+    "fusion-agent"
   ]
 }

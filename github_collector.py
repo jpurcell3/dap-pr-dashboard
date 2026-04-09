@@ -743,9 +743,8 @@ def _extract_ticket_summary(raw_summary: str) -> str:
             header = ln
             continue
 
-        # Action context line (follows header): "action: synchronize, merged: 0"
+        # Skip the action context line (GitHub internals, not useful)
         if lower.startswith("action:") and header and not summary_line:
-            header += " | " + ln
             continue
 
         # Summary: "Summary: 5 errors, 0 warnings"

@@ -586,10 +586,10 @@ def fetch_commit_checks(
                 check_name = cr.get("name", "")
                 raw_summary = (cr.get("output") or {}).get("summary", "")
                 raw_title = (cr.get("output") or {}).get("title", "")
-                # Twistlock, Secrets Scanner, checkmarx: extract only the
-                # Scan Summary / Recommended Action, discard boilerplate.
-                if check_name.lower() in ("twistlock", "secrets scanner", "checkmarx"):
-                    summary_text = _extract_twistlock_summary(raw_summary)
+                # Security scan checks: extract only the Summary section,
+                # discarding verbose tool descriptions and boilerplate.
+                if _is_summary_only_check(check_name):
+                    summary_text = _extract_scan_summary(raw_summary)
                 else:
                     summary_text = _strip_html(raw_summary)
                 # Drop the output title when it just repeats the check name
@@ -674,23 +674,54 @@ def fetch_commit_checks(
 
 def _strip_html(text: str) -> str:
     """Remove HTML tags from a string (best-effort)."""
-    import re
     return re.sub(r"<[^>]+>", "", text).strip()
 
 
-def _extract_twistlock_summary(raw_summary: str) -> str:
-    """Extract only the Scan Summary Result and Recommended Action from
-    Twistlock check output, discarding the boilerplate description.
+# Check names (lowercased) whose output should be reduced to the Summary
+# section only.  Uses substring matching so e.g. "blackduck" catches all
+# Blackduck variants.
+_SUMMARY_ONLY_KEYWORDS: list[str] = [
+    "twistlock",
+    "secrets scanner",
+    "checkmarx",
+    "blackduck",
+    "black duck",
+    "mcafee",
+    "acronix",
+]
 
-    Returns a compact plain-text string.  Falls back to the full
-    HTML-stripped text if the expected markers are not found.
+
+def _is_summary_only_check(check_name: str) -> bool:
+    """Return True if *check_name* is one of the security-scan checks whose
+    output should be trimmed to the Summary section only."""
+    lower = check_name.lower()
+    return any(kw in lower for kw in _SUMMARY_ONLY_KEYWORDS)
+
+
+def _extract_scan_summary(raw_summary: str) -> str:
+    """Extract the key details from a security-scan check output.
+
+    Tries several patterns in priority order:
+
+    1. ``***Scan Summary Result:*** ***…***`` / ``***Recommended Action:*** ***…***``
+       (Twistlock / Secrets Scanner / checkmarx style)
+    2. A markdown ``## Summary`` (or ``### Summary``) section — returns
+       everything from that heading until the next heading or end of text.
+    3. A bold ``**Summary**`` or ``***Summary***`` label — returns the
+       paragraph following it.
+    4. Fallback: strip HTML and return the full text (unchanged behaviour).
     """
-    import re
+    if not raw_summary:
+        return ""
+
+    # --- Pattern 1: Twistlock-style bold markers ---
     scan_match = re.search(
-        r"\*{3}Scan Summary Result:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+        r"\*{2,3}Scan Summary Result:?\*{2,3}\s*\*{2,3}(.*?)\*{2,3}",
+        raw_summary, re.DOTALL,
     )
     action_match = re.search(
-        r"\*{3}Recommended Action:\*{3}\s*\*{3}(.*?)\*{3}", raw_summary
+        r"\*{2,3}Recommended Action:?\*{2,3}\s*\*{2,3}(.*?)\*{2,3}",
+        raw_summary, re.DOTALL,
     )
     if scan_match or action_match:
         parts = []
@@ -699,7 +730,28 @@ def _extract_twistlock_summary(raw_summary: str) -> str:
         if action_match:
             parts.append(f"Action: {action_match.group(1).strip()}")
         return " | ".join(parts)
-    # Fallback: strip HTML and return full text
+
+    # --- Pattern 2: Markdown heading  ## Summary  /  ### Summary ---
+    md_match = re.search(
+        r"^#{2,4}\s+Summary\b[^\n]*\n(.*?)(?=^#{2,4}\s|\Z)",
+        raw_summary, re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    )
+    if md_match:
+        section = _strip_html(md_match.group(1)).strip()
+        if section:
+            return section
+
+    # --- Pattern 3: Bold **Summary** or ***Summary*** inline label ---
+    bold_match = re.search(
+        r"\*{2,3}Summary:?\*{2,3}\s*(.*?)(?=\*{2,3}[A-Z]|\n\n|\Z)",
+        raw_summary, re.DOTALL | re.IGNORECASE,
+    )
+    if bold_match:
+        section = _strip_html(bold_match.group(1)).strip()
+        if section:
+            return section
+
+    # --- Fallback: strip HTML, return full text ---
     return _strip_html(raw_summary)
 
 

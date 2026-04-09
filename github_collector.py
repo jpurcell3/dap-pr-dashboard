@@ -586,9 +586,12 @@ def fetch_commit_checks(
                 check_name = cr.get("name", "")
                 raw_summary = (cr.get("output") or {}).get("summary", "")
                 raw_title = (cr.get("output") or {}).get("title", "")
+                # DRP Checkers: keep only the overall status + failed sub-checks.
+                if _is_drp_checker(check_name):
+                    summary_text = _extract_drp_failures(raw_summary)
                 # Security scan checks: extract only the Summary section,
                 # discarding verbose tool descriptions and boilerplate.
-                if _is_summary_only_check(check_name):
+                elif _is_summary_only_check(check_name):
                     summary_text = _extract_scan_summary(raw_summary)
                 else:
                     summary_text = _strip_html(raw_summary)
@@ -696,6 +699,62 @@ def _is_summary_only_check(check_name: str) -> bool:
     output should be trimmed to the Summary section only."""
     lower = check_name.lower()
     return any(kw in lower for kw in _SUMMARY_ONLY_KEYWORDS)
+
+
+def _is_drp_checker(check_name: str) -> bool:
+    """Return True if *check_name* looks like a DRP Checkers aggregate check."""
+    return bool(re.search(r"drp.check", check_name, re.IGNORECASE))
+
+
+def _extract_drp_failures(raw_summary: str) -> str:
+    """Extract the overall status line and only the failed sub-checks from
+    DRP Checkers output.
+
+    Looks for:
+    - A status line containing "overall status" (kept as-is)
+    - Component lines marked with cross/fail unicode markers
+
+    Returns a compact string like:
+      ``DRP Checkers overall status: FAIL | Failed: mcafee antivirus, Ticket, twistlock``
+    """
+    if not raw_summary:
+        return ""
+    text = _strip_html(raw_summary)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    # Unicode markers for pass/fail
+    _fail_re = re.compile(
+        r"[\u274C\u274E\u2716\u2718\u26D4]"   # ❌ ❎ ✖ ✘ ⛔
+        r"|:x:|:cross_mark:|:heavy_multiplication_x:"
+    )
+    _pass_re = re.compile(
+        r"[\u2705\u2714\u2713\u2611]"          # ✅ ✔ ✓ ☑
+        r"|:white_check_mark:|:heavy_check_mark:|:check:"
+    )
+
+    # Find the overall status line
+    status_line = ""
+    for ln in lines:
+        if "overall status" in ln.lower():
+            status_line = ln
+            break
+
+    # Extract only the failed component names
+    failed = []
+    for ln in lines:
+        if _fail_re.search(ln):
+            # Strip the marker and any leading separator chars
+            name = _fail_re.sub("", ln).strip()
+            name = re.sub(r"^[\s\-|:]+", "", name).strip()
+            if name:
+                failed.append(name)
+
+    parts = []
+    if status_line:
+        parts.append(status_line)
+    if failed:
+        parts.append("Failed: " + ", ".join(failed))
+    return " | ".join(parts) if parts else text
 
 
 def _extract_scan_summary(raw_summary: str) -> str:

@@ -710,44 +710,67 @@ def _extract_drp_failures(raw_summary: str) -> str:
     """Extract the overall status line and only the failed sub-checks from
     DRP Checkers output.
 
-    Looks for:
-    - A status line containing "overall status" (kept as-is)
-    - Component lines marked with cross/fail unicode markers
+    Uses an inverse approach: lines with a pass/tick marker are considered
+    passing — any other component line (cross, timed_out, unknown emoji,
+    etc.) is treated as failed.  This handles timed-out checks, unusual
+    markers, and future status types.
 
     Returns a compact string like:
-      ``DRP Checkers overall status: FAIL | Failed: mcafee antivirus, Ticket, twistlock``
+      ``DRP Checkers overall status: FAIL | Failed: mcafee antivirus, Ticket``
     """
     if not raw_summary:
         return ""
     text = _strip_html(raw_summary)
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-    # Unicode markers for pass/fail
-    _fail_re = re.compile(
-        r"[\u274C\u274E\u2716\u2718\u26D4]"   # ❌ ❎ ✖ ✘ ⛔
-        r"|:x:|:cross_mark:|:heavy_multiplication_x:"
-    )
+    # Pass markers — only these mean "passed"
     _pass_re = re.compile(
         r"[\u2705\u2714\u2713\u2611]"          # ✅ ✔ ✓ ☑
         r"|:white_check_mark:|:heavy_check_mark:|:check:"
+        r"|tick\b"
     )
 
-    # Find the overall status line
+    # Any emoji-like marker at the start of a line indicates a component line
+    # (covers tick, cross, timed_out, hourglass, warning, etc.)
+    _marker_re = re.compile(
+        r"^(?:"
+        r"[\u2705\u2714\u2713\u2611"            # pass markers
+        r"\u274C\u274E\u2716\u2718\u26D4"       # fail markers
+        r"\u23F3\u231B\u26A0\u2757\u2753"       # ⏳ ⌛ ⚠ ❗ ❓
+        r"\U0001F552\U0001F6D1]"                # 🕒 🛑
+        r"|:[a-z_]+:"                           # GitHub emoji shortcodes
+        r"|tick\b|crossed\b|timed_out\w*"       # text-based markers
+        r")"
+    )
+
+    # Collect overall status lines (may be multiple; keep the first
+    # that contains a result keyword)
     status_line = ""
     for ln in lines:
         if "overall status" in ln.lower():
-            status_line = ln
-            break
+            # Prefer a status line that actually states the result
+            has_result = re.search(r"fail|success|pass|error", ln, re.IGNORECASE)
+            if has_result:
+                status_line = ln
+                break
+            elif not status_line:
+                status_line = ln
 
-    # Extract only the failed component names
+    # Identify component lines and split into pass/fail
     failed = []
     for ln in lines:
-        if _fail_re.search(ln):
-            # Strip the marker and any leading separator chars
-            name = _fail_re.sub("", ln).strip()
-            name = re.sub(r"^[\s\-|:]+", "", name).strip()
-            if name:
-                failed.append(name)
+        if not _marker_re.search(ln):
+            continue
+        # Skip status/header lines
+        if "overall status" in ln.lower() or "drp checker" in ln.lower():
+            continue
+        if _pass_re.search(ln):
+            continue  # This component passed
+        # Not a pass — extract component name by stripping the marker
+        name = _marker_re.sub("", ln).strip()
+        name = re.sub(r"^[\s\-|:]+", "", name).strip()
+        if name:
+            failed.append(name)
 
     parts = []
     if status_line:

@@ -13,9 +13,8 @@
     "dsp-fusion-manager-restservice"
   ],
   "Catalog": [
-    "dsp-catalog-svc",
     "hzp-catalog-svc",
-    "dsp-catalog-gui"
+    "dap-catalog-workflows"
   ],
   "InfraFleet": [
     "hzp-inventory",

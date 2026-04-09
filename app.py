@@ -11,6 +11,7 @@ __version__ = "1.0.0"
 import json
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -18,9 +19,9 @@ from urllib.parse import urlparse
 from flask import Flask, jsonify, render_template, request
 
 from github_collector import (
-    fetch_all_data, get_fusion_repos, get_all_org_repos, load_cache, save_cache,
+    fetch_all_data, get_filtered_repos, get_all_org_repos, load_cache, save_cache,
     cancel_refresh, RefreshCancelled,
-    GITHUB_API_BASE, ORG_NAME, REPO_PREFIX,
+    GITHUB_API_BASE, ORG_NAME, REPO_FILTER,
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
 )
 from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
@@ -196,7 +197,7 @@ def api_config():
         "github_api_url": GITHUB_API_BASE,
         "github_web_url": GITHUB_WEB_URL,
         "github_org": ORG_NAME,
-        "repo_prefix": REPO_PREFIX,
+        "repo_filter": REPO_FILTER or "",
         "default_lookback_days": DEFAULT_PR_LOOKBACK_DAYS,
         "max_prs_per_repo": MAX_PRS_PER_REPO,
         "env_file": str(os.path.join(os.path.dirname(__file__), ".env")),
@@ -235,14 +236,14 @@ def api_repos():
     all : bool
         ``true`` returns **every** repo in the org as objects with
         priority metadata: ``{name, priority, has_data, pr_count,
-        prefix_match}``.  The list is sorted by descending priority.
+        filter_match}``.  The list is sorted by descending priority.
     """
     try:
         show_all = request.args.get("all", "").lower() in ("true", "1", "yes")
 
         if not show_all:
             # Simple mode: only repos with data (string list)
-            repos = get_fusion_repos()
+            repos = get_filtered_repos()
             if data_store_loaded():
                 raw_prs = data_store_get("raw_prs", {})
                 repos_with_data = {
@@ -255,23 +256,24 @@ def api_repos():
         # Full mode: all org repos with priority scoring
         all_names = get_all_org_repos()
         raw_prs = data_store_get("raw_prs", {}) if data_store_loaded() else {}
+        filter_pat = re.compile(REPO_FILTER, re.IGNORECASE) if REPO_FILTER else None
 
         scored: list[dict] = []
         for name in all_names:
             prs = raw_prs.get(name, [])
             pr_count = len(prs) if prs else 0
             has_data = pr_count > 0
-            prefix_match = name.lower().startswith(REPO_PREFIX) if REPO_PREFIX else False
+            filter_match = bool(filter_pat.search(name)) if filter_pat else True
 
-            # Priority: repos with data first, then prefix matches, then alphabetical
-            priority = (2 if has_data else 0) + (1 if prefix_match else 0)
+            # Priority: repos with data first, then filter matches, then alphabetical
+            priority = (2 if has_data else 0) + (1 if filter_match else 0)
 
             scored.append({
                 "name": name,
                 "priority": priority,
                 "has_data": has_data,
                 "pr_count": pr_count,
-                "prefix_match": prefix_match,
+                "filter_match": filter_match,
             })
 
         scored.sort(key=lambda r: (-r["priority"], r["name"]))
@@ -317,12 +319,12 @@ def _do_refresh(repos=None, since=None, until=None):
             logger.info("Refresh (partial): repos=%s, since=%s, until=%s", repos, since, until)
         else:
             refresh_status_set("progress", "Discovering repos...")
-            repos = get_fusion_repos()
+            repos = get_filtered_repos()
             refresh_status_bulk_set({
                 "repos_total": len(repos),
                 "progress": f"Found {len(repos)} repos. Fetching PRs...",
             })
-            logger.info("Refresh: found %d fusion repos", len(repos))
+            logger.info("Refresh: found %d repos", len(repos))
 
         def progress_cb(repo_name, current, total):
             refresh_status_bulk_set({

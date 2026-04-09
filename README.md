@@ -61,7 +61,7 @@ All configuration is via environment variables (or `.env` file):
 | `GITHUB_API_URL` | `https://api.github.com` | GitHub API base URL |
 | `GITHUB_TOKEN` | *(required)* | Personal access token |
 | `GITHUB_ORG` | `fusion-e` | Organization name |
-| `GITHUB_REPO_PREFIX` | `fusion` | Only sync repos matching this prefix (empty = all) |
+| `GITHUB_REPO_FILTER` | *(empty)* | Regex to filter repo names (empty = all repos in org) |
 | `SSL_VERIFY` | `true` | Set `false` for self-signed certs |
 | `GITHUB_WEB_URL` | *(auto-derived)* | Override the web URL for PR links |
 | `DEFAULT_PR_LOOKBACK_DAYS` | `90` | Default date window for refreshes |

@@ -11,6 +11,7 @@ project directory. See .env for available settings.
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -56,7 +57,7 @@ _load_env_file()
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
 ORG_NAME = os.environ.get("GITHUB_ORG", "fusion-e")
-REPO_PREFIX = os.environ.get("GITHUB_REPO_PREFIX", "fusion").lower()
+REPO_FILTER = os.environ.get("GITHUB_REPO_FILTER", "").strip()
 SSL_VERIFY = os.environ.get("SSL_VERIFY", "false").lower() not in ("false", "0", "no")
 DEFAULT_CACHE_PATH = Path(__file__).parent / "pr_cache.json"
 DEFAULT_PR_LOOKBACK_DAYS = int(os.environ.get("DEFAULT_PR_LOOKBACK_DAYS", "90"))
@@ -70,8 +71,8 @@ MAX_CONCURRENT_REPOS = int(os.environ.get("MAX_CONCURRENT_REPOS", "4"))
 MAX_CONCURRENT_PRS = int(os.environ.get("MAX_CONCURRENT_PRS", "6"))
 
 logger.info(
-    "Config loaded — API: %s | Org: %s | Prefix: %r | SSL verify: %s",
-    GITHUB_API_BASE, ORG_NAME, REPO_PREFIX, SSL_VERIFY,
+    "Config loaded — API: %s | Org: %s | Repo filter: %r | SSL verify: %s",
+    GITHUB_API_BASE, ORG_NAME, REPO_FILTER or "(none)", SSL_VERIFY,
 )
 
 # Cancellation event — set this to signal fetch_all_data to stop early.
@@ -260,27 +261,29 @@ def _get_paginated(url: str, headers: dict, params: dict | None = None,
 # Repository discovery
 # ---------------------------------------------------------------------------
 
-def get_fusion_repos(token: str | None = None) -> list[str]:
-    """Return a sorted list of repo names starting with ``fusion`` in *fusion-e*.
+def get_filtered_repos(token: str | None = None) -> list[str]:
+    """Return a sorted list of repo names in the configured org.
 
-    Uses the GitHub ``/orgs/{org}/repos`` endpoint with pagination.
+    When ``GITHUB_REPO_FILTER`` is set, only repos whose name matches the
+    regex (case-insensitive search) are returned.  When unset/empty, **all**
+    repos in the org are returned.
     """
     headers = _build_headers(token)
     url = f"{GITHUB_API_BASE}/orgs/{ORG_NAME}/repos"
     params = {"per_page": 100, "type": "all"}
 
     all_repos = _get_paginated(url, headers, params)
-    if REPO_PREFIX:
+    if REPO_FILTER:
+        pattern = re.compile(REPO_FILTER, re.IGNORECASE)
         filtered_repos = sorted(
             repo["name"]
             for repo in all_repos
-            if repo.get("name", "").lower().startswith(REPO_PREFIX)
+            if repo.get("name") and pattern.search(repo["name"])
         )
     else:
-        # Empty prefix means include all repos in the org
-        filtered_repos = sorted(repo["name"] for repo in all_repos)
+        filtered_repos = sorted(repo["name"] for repo in all_repos if repo.get("name"))
     logger.info(
-        "Found %d repos in %s (prefix=%r).", len(filtered_repos), ORG_NAME, REPO_PREFIX
+        "Found %d repos in %s (filter=%r).", len(filtered_repos), ORG_NAME, REPO_FILTER or "(none)"
     )
     return filtered_repos
 
@@ -817,7 +820,7 @@ def fetch_all_data(
     ----------
     repos:
         Explicit list of repo names. If ``None``, discovers repos via
-        :func:`get_fusion_repos`.
+        :func:`get_filtered_repos`.
     progress_callback:
         Optional callable ``(repo_name, current_index, total_repos) -> None``
         invoked once per repo when it *completes* (ordering may differ from
@@ -837,7 +840,7 @@ def fetch_all_data(
         token = get_github_token()
 
     if repos is None:
-        repos = get_fusion_repos(token=token)
+        repos = get_filtered_repos(token=token)
 
     total = len(repos)
     result: dict[str, list[dict]] = {}

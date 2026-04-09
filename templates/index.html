@@ -1807,12 +1807,26 @@
         }
 
         // When a team is active, show only that team's repos
-        const filteredList = _activeTeamRepos
-            ? state.repoList.filter(r => {
+        let filteredList;
+        if (_activeTeamRepos) {
+            // Start with repos from state.repoList that match the team
+            const repoListNames = new Set(state.repoList.map(r =>
+                (typeof r === 'string' ? r : r.name).toLowerCase()));
+            filteredList = state.repoList.filter(r => {
                 const name = typeof r === 'string' ? r : r.name;
                 return _activeTeamRepos.has(name.toLowerCase());
-            })
-            : state.repoList;
+            });
+            // Also include team repos NOT in state.repoList (e.g. different prefix)
+            const foundNames = new Set(filteredList.map(r =>
+                (typeof r === 'string' ? r : r.name).toLowerCase()));
+            for (const teamRepo of _activeTeamRepos) {
+                if (!foundNames.has(teamRepo)) {
+                    filteredList.push({ name: teamRepo, priority: 0, has_data: false, filter_match: false });
+                }
+            }
+        } else {
+            filteredList = state.repoList;
+        }
 
         if (filteredList.length === 0) {
             container.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.8rem;">No repos match this team</div>';
@@ -1824,7 +1838,7 @@
         container.innerHTML = filteredList.map((repo, idx) => {
             const name = typeof repo === 'string' ? repo : repo.name;
             const hasData = (typeof repo === 'object') ? repo.has_data : false;
-            const prefixMatch = (typeof repo === 'object') ? repo.prefix_match : false;
+            const filterMatch = (typeof repo === 'object') ? repo.filter_match : false;
             const isOverflow = idx >= REPO_VISIBLE_LIMIT;
 
             // Small visual hint for repos that already have data
@@ -1859,7 +1873,7 @@
             console.warn('Could not load repo list for filter:', e);
             // Fall back: try to get repos from cached summary
             if (state.cachedSummary && state.cachedSummary.repo_summaries) {
-                state.repoList = state.cachedSummary.repo_summaries.map(r => ({ name: r.repo_name || r.name, priority: 1, has_data: true, prefix_match: true }));
+                state.repoList = state.cachedSummary.repo_summaries.map(r => ({ name: r.repo_name || r.name, priority: 1, has_data: true, filter_match: true }));
                 populateRepoChecklist();
             }
         }

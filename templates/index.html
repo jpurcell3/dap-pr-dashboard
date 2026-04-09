@@ -1247,6 +1247,47 @@
         return /drp.check/i.test(name);
     }
 
+    /** Check if a check name is the Ticket validation check */
+    function isTicketCheck(name) {
+        return (name || '').trim().toLowerCase() === 'ticket';
+    }
+
+    /** Render Ticket check output as summary + expandable error table.
+     *  Expects output_summary to be a JSON string with {type:"ticket", header, summary, errors[]}.
+     *  Falls back to plain text if JSON parsing fails. */
+    function formatTicketOutput(text) {
+        if (!text) return '';
+        let data;
+        try { data = JSON.parse(text); } catch { return esc(text); }
+        if (!data || data.type !== 'ticket') return esc(text);
+
+        let html = '';
+        if (data.header) {
+            html += `<div class="text-muted" style="font-size:0.78rem;">${esc(data.header)}</div>`;
+        }
+        if (data.summary) {
+            html += `<div class="text-danger fw-bold" style="font-size:0.82rem;">${esc(data.summary)}</div>`;
+        }
+        if (data.errors && data.errors.length > 0) {
+            html += `<details class="mt-1">
+                <summary style="cursor:pointer; font-size:0.78rem; color:#f85149;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>${data.errors.length} Error${data.errors.length !== 1 ? 's' : ''} <span class="text-muted">(click to expand)</span>
+                </summary>
+                <table class="table table-sm table-dark-custom mt-1 mb-0" style="font-size:0.75rem;">
+                    <thead><tr><th>Commit</th><th>Message</th><th>Submodule</th></tr></thead>
+                    <tbody>
+                        ${data.errors.map(e => `<tr>
+                            <td><code style="font-size:0.72rem; color:#58a6ff;">${esc((e.commit || '').substring(0, 10))}</code></td>
+                            <td>${esc(e.message || '')}</td>
+                            <td>${esc(e.submodule || '')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </details>`;
+        }
+        return html || esc(text);
+    }
+
     /** Generic Chart.js default options for dark theme */
     function chartDefaults() {
         return {
@@ -3572,6 +3613,8 @@
                                         ${c.output_title ? `<strong>${esc(c.output_title)}</strong>` : ''}
                                         ${c.output_summary ? (isDrpChecker(c.name)
                                             ? formatDrpFailedChecks(c.output_summary)
+                                            : isTicketCheck(c.name)
+                                            ? formatTicketOutput(c.output_summary)
                                             : `<span class="ms-1">${esc(filterFailureLines(c.output_summary))}</span>`) : ''}
                                     </div>` : ''}
                             `).join('')}

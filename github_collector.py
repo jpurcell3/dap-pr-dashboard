@@ -589,6 +589,9 @@ def fetch_commit_checks(
                 # DRP Checkers: keep only the overall status + failed sub-checks.
                 if _is_drp_checker(check_name):
                     summary_text = _extract_drp_failures(raw_summary)
+                # Ticket check: extract structured summary with error table.
+                elif _is_ticket_check(check_name):
+                    summary_text = _extract_ticket_summary(raw_summary)
                 # Security scan checks: extract only the Summary section,
                 # discarding verbose tool descriptions and boilerplate.
                 elif _is_summary_only_check(check_name):
@@ -699,6 +702,91 @@ def _is_summary_only_check(check_name: str) -> bool:
     output should be trimmed to the Summary section only."""
     lower = check_name.lower()
     return any(kw in lower for kw in _SUMMARY_ONLY_KEYWORDS)
+
+
+def _is_ticket_check(check_name: str) -> bool:
+    """Return True if *check_name* is the Ticket validation check."""
+    return check_name.strip().lower() == "ticket"
+
+
+def _extract_ticket_summary(raw_summary: str) -> str:
+    """Extract structured data from a Ticket check output.
+
+    Returns a JSON string with the format::
+
+        {"type": "ticket",
+         "header": "Checking for Required Tickets ...",
+         "summary": "5 errors, 0 warnings",
+         "errors": [{"commit": "abc123", "message": "...", "submodule": "No"}, ...]}
+
+    The frontend can detect ``"type":"ticket"`` and render an expandable
+    table.  Falls back to plain text if parsing fails.
+    """
+    if not raw_summary:
+        return ""
+    text = _strip_html(raw_summary)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    header = ""
+    summary_line = ""
+    errors: list[dict] = []
+
+    # State machine: parse header, then summary, then table rows
+    in_table = False
+    table_headers: list[str] = []
+
+    for ln in lines:
+        lower = ln.lower()
+
+        # Header: "Checking for Required Tickets ..."
+        if "checking for required ticket" in lower:
+            header = ln
+            continue
+
+        # Action context line (follows header): "action: synchronize, merged: 0"
+        if lower.startswith("action:") and header and not summary_line:
+            header += " | " + ln
+            continue
+
+        # Summary: "Summary: 5 errors, 0 warnings"
+        if lower.startswith("summary:") or re.match(r"^\d+\s+error", lower):
+            summary_line = ln
+            continue
+
+        # Table header row (contains "Commit" and "Message")
+        if "commit" in lower and "message" in lower:
+            # Split on 2+ spaces or tab to detect columns
+            table_headers = re.split(r"\s{2,}|\t", ln)
+            in_table = True
+            continue
+
+        # Table separator rows (dashes, pipes)
+        if in_table and re.match(r"^[\-|:\s]+$", ln):
+            continue
+
+        # Table data rows (hex SHA prefix + content)
+        if in_table and re.match(r"^[0-9a-f]{7,40}\b", ln):
+            cols = re.split(r"\s{2,}|\t", ln, maxsplit=2)
+            errors.append({
+                "commit": cols[0] if len(cols) > 0 else "",
+                "message": cols[1] if len(cols) > 1 else "",
+                "submodule": cols[2] if len(cols) > 2 else "",
+            })
+            continue
+
+    # If we got structured data, return JSON
+    if header or summary_line or errors:
+        result = {"type": "ticket"}
+        if header:
+            result["header"] = header
+        if summary_line:
+            result["summary"] = summary_line
+        if errors:
+            result["errors"] = errors
+        return json.dumps(result)
+
+    # Fallback: plain text
+    return text
 
 
 def _is_drp_checker(check_name: str) -> bool:

@@ -592,6 +592,9 @@ def fetch_commit_checks(
                 # Ticket check: extract structured summary with error table.
                 elif _is_ticket_check(check_name):
                     summary_text = _extract_ticket_summary(raw_summary)
+                # SonarQube: extract Quality Gate section only.
+                elif _is_sonarqube_check(check_name):
+                    summary_text = _extract_sonarqube_summary(raw_summary)
                 # Security scan checks: extract only the Summary section,
                 # discarding verbose tool descriptions and boilerplate.
                 elif _is_summary_only_check(check_name):
@@ -703,6 +706,62 @@ def _is_summary_only_check(check_name: str) -> bool:
     output should be trimmed to the Summary section only."""
     lower = check_name.lower()
     return any(kw in lower for kw in _SUMMARY_ONLY_KEYWORDS)
+
+
+def _is_sonarqube_check(check_name: str) -> bool:
+    """Return True if *check_name* is a SonarQube / SonarCloud check."""
+    return "sonar" in check_name.lower()
+
+
+def _extract_sonarqube_summary(raw_summary: str) -> str:
+    """Extract the Quality Gate result and failed conditions from SonarQube output.
+
+    Looks for a "Quality Gate" line followed by condition lines and returns
+    a compact block like::
+
+        Quality Gate failed
+        Failed conditions
+         11 Security Hotspots
+         8.3% Duplication on New Code (required ≤ 3%)
+
+    Falls back to full stripped text if the Quality Gate section isn't found.
+    """
+    if not raw_summary:
+        return ""
+    text = _strip_html(raw_summary)
+    lines = [ln for ln in text.splitlines()]
+
+    # Find the "Quality Gate" line
+    start = -1
+    for i, ln in enumerate(lines):
+        if "quality gate" in ln.lower():
+            start = i
+            break
+
+    if start == -1:
+        return text
+
+    # Collect from Quality Gate line through the condition block.
+    # Stop at a blank-line gap followed by non-condition content, or a
+    # section that looks like project/analysis metadata.
+    kept: list[str] = []
+    blank_run = 0
+    for ln in lines[start:]:
+        stripped = ln.strip()
+        # Stop markers: links, project keys, analysis metadata
+        if re.match(r"https?://", stripped, re.IGNORECASE):
+            break
+        if re.match(r"^(project[_ ]?key|analysis[_ ]?id)\b", stripped, re.IGNORECASE):
+            break
+        if stripped == "":
+            blank_run += 1
+            if blank_run >= 2:
+                break
+            continue
+        blank_run = 0
+        kept.append(stripped)
+
+    return "\n".join(kept) if kept else text
 
 
 def _is_ticket_check(check_name: str) -> bool:

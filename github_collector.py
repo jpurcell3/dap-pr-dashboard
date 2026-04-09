@@ -694,6 +694,7 @@ _SUMMARY_ONLY_KEYWORDS: list[str] = [
     "black duck",
     "mcafee",
     "acronix",
+    "powerapi-linter",
 ]
 
 

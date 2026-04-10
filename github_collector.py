@@ -720,55 +720,74 @@ def _is_sonarqube_check(check_name: str) -> bool:
     return "sonar" in check_name.lower()
 
 
+def _strip_markdown(text: str) -> str:
+    """Strip markdown image and link syntax, returning only visible text.
+
+    * ``[![alt](img_url)](link_url)`` → removed (image-only links)
+    * ``![alt](url)`` → removed (inline images)
+    * ``[text](url)`` → ``text`` (keep link text)
+    * ``##`` heading markers → removed
+    """
+    # Remove image-links: [![...](img)](url)
+    text = re.sub(r"\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)", "", text)
+    # Remove standalone images: ![...](url)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+    # Convert text links to just the link text: [text](url) → text
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    # Remove heading markers
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    return text
+
+
 def _extract_sonarqube_summary(raw_summary: str) -> str:
-    """Extract the Quality Gate result and failed conditions from SonarQube output.
+    """Extract just the failed conditions from SonarQube check output.
 
-    Looks for a "Quality Gate" line followed by condition lines and returns
-    a compact block like::
+    Returns a compact block like::
 
-        Quality Gate failed
         Failed conditions
          11 Security Hotspots
          8.3% Duplication on New Code (required ≤ 3%)
 
-    Falls back to full stripped text if the Quality Gate section isn't found.
+    The ``output_title`` ("Quality Gate failed") is rendered separately in
+    the UI, so this function only needs to produce the condition list.
+    Returns empty string when no meaningful conditions are found.
     """
     if not raw_summary:
         return ""
-    text = _strip_html(raw_summary)
-    lines = [ln for ln in text.splitlines()]
 
-    # Find the "Quality Gate" line
+    # Strip HTML first, then markdown syntax.
+    text = _strip_markdown(_strip_html(raw_summary))
+
+    lines = text.splitlines()
+
+    # Look for the "Failed conditions" section.
     start = -1
     for i, ln in enumerate(lines):
-        if "quality gate" in ln.lower():
+        if "failed conditions" in ln.lower():
             start = i
             break
 
     if start == -1:
-        return text
+        # No failed-conditions block (e.g. promotional text only).
+        return ""
 
-    # Collect from Quality Gate line through the condition block.
-    # Stop at a blank-line gap followed by non-condition content, or a
-    # section that looks like project/analysis metadata.
     kept: list[str] = []
-    blank_run = 0
     for ln in lines[start:]:
         stripped = ln.strip()
-        # Stop markers: links, project keys, analysis metadata
-        if re.match(r"https?://", stripped, re.IGNORECASE):
+        # Stop at boilerplate lines
+        if re.match(r"^see analysis details", stripped, re.IGNORECASE):
             break
-        if re.match(r"^(project[_ ]?key|analysis[_ ]?id)\b", stripped, re.IGNORECASE):
+        if re.match(r"^catch issues before", stripped, re.IGNORECASE):
             break
-        if stripped == "":
-            blank_run += 1
-            if blank_run >= 2:
-                break
+        if not stripped:
             continue
-        blank_run = 0
-        kept.append(stripped)
+        # "Failed conditions" becomes the header; condition lines get a leading space.
+        if kept:
+            kept.append(" " + stripped)
+        else:
+            kept.append(stripped)
 
-    return "\n".join(kept) if kept else text
+    return "\n".join(kept) if kept else ""
 
 
 def _is_ticket_check(check_name: str) -> bool:

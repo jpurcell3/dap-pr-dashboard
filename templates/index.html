@@ -1485,31 +1485,65 @@
         return html || esc(text);
     }
 
+    /** Create a vertical gradient fill for bar charts.
+     *  Returns a CanvasGradient going from colorTop to colorBottom. */
+    function barGradient(ctx, colorTop, colorBottom) {
+        const chart = ctx.chart;
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return colorTop;
+        const g = c.createLinearGradient(chartArea.left, chartArea.top, chartArea.left, chartArea.bottom);
+        g.addColorStop(0, colorTop);
+        g.addColorStop(1, colorBottom);
+        return g;
+    }
+
+    /** Create a horizontal gradient fill for horizontal bar charts. */
+    function hBarGradient(ctx, colorLeft, colorRight) {
+        const chart = ctx.chart;
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return colorLeft;
+        const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+        g.addColorStop(0, colorLeft);
+        g.addColorStop(1, colorRight);
+        return g;
+    }
+
     /** Generic Chart.js default options for dark theme */
     function chartDefaults() {
         return {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 700,
+                easing: 'easeOutQuart',
+            },
             plugins: {
-                legend: { labels: { color: '#c9d1d9', font: { size: 12 } } },
+                legend: { labels: { color: '#c9d1d9', font: { size: 12 }, usePointStyle: true, pointStyle: 'rectRounded' } },
                 tooltip: {
-                    backgroundColor: '#1c2128',
+                    backgroundColor: 'rgba(22, 27, 34, 0.95)',
                     titleColor: '#f0f6fc',
                     bodyColor: '#c9d1d9',
-                    borderColor: '#30363d',
+                    borderColor: 'rgba(88, 166, 255, 0.3)',
                     borderWidth: 1,
-                    cornerRadius: 6,
-                    padding: 10,
+                    cornerRadius: 8,
+                    padding: 12,
+                    boxPadding: 4,
+                    titleFont: { weight: '600', size: 13 },
+                    bodyFont: { size: 12 },
+                    displayColors: true,
+                    usePointStyle: true,
                 },
             },
             scales: {
                 x: {
                     ticks: { color: '#8b949e', font: { size: 11 } },
-                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    grid: { color: 'rgba(48,54,61,0.3)', lineWidth: 0.5 },
+                    border: { color: 'rgba(48,54,61,0.5)' },
                 },
                 y: {
                     ticks: { color: '#8b949e', font: { size: 11 } },
-                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    grid: { color: 'rgba(48,54,61,0.3)', lineWidth: 0.5 },
+                    border: { color: 'rgba(48,54,61,0.5)' },
                 },
             },
         };
@@ -2327,11 +2361,16 @@
                     datasets: [{
                         label: 'Avg Cycle Time (hours)',
                         data: sorted.map(r => round(r.avg_cycle_time_hours)),
-                        backgroundColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
-                        borderColor: document.documentElement.getAttribute('data-bs-theme') === 'light'
-                            ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)',
-                        borderWidth: { top: 1, bottom: 1, right: 2, left: 0 },
-                        borderRadius: 3,
+                        backgroundColor: (ctx) => {
+                            const v = sorted[ctx.dataIndex]?.avg_cycle_time_hours || 0;
+                            const c = cycleColor(v);
+                            return hBarGradient(ctx, c.replace('0.85)', '0.4)'), c);
+                        },
+                        hoverBackgroundColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
+                        borderColor: sorted.map(r => cycleColor(r.avg_cycle_time_hours)),
+                        borderWidth: { top: 0, bottom: 0, right: 2, left: 0 },
+                        borderRadius: 4,
+                        borderSkipped: false,
                     }],
                 },
                 options: {
@@ -2384,6 +2423,10 @@
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
     let _allPrsDisplayData = []; // the displayPrs array used to build the current table
     let _allPrsStateFilters = new Set(); // active PR state filters (open, merged, closed)
+    let _allPrsRepoFilter = '';           // selected repo name, '' = all
+    let _allPrsCheckGroupFilter = '';     // selected check group/name filter
+    let _allPrsCheckResultFilter = '';    // 'failed', 'passed', or ''
+    let _allPrsCheckGroupLabel = '';      // display label for check group filter
     let _insightViewMode = 'checks'; // 'checks' or 'severity'
     let _bottleneckData = [];  // cached bottleneck data from /api/bottlenecks
 
@@ -2518,6 +2561,13 @@
                 <p class="mt-2">Loading data...</p>
             </div>`;
 
+        // Reset insight filters on fresh data load
+        _allPrsRepoFilter = '';
+        _allPrsCheckGroupFilter = '';
+        _allPrsCheckGroupLabel = '';
+        _allPrsCheckResultFilter = '';
+        _allPrsStateFilters.clear();
+
         try {
             const [prs, bnRaw] = await Promise.all([
                 apiFetch('/api/prs?limit=500'),
@@ -2540,14 +2590,11 @@
         }
     }
 
-    /** Handle click on Failed Checks doughnut segment – filter the table */
+    /** Handle click on Failed Checks doughnut segment – filter everything */
     function _onDoughnutFilterClick(filterVal, displayName) {
-        const nameEl = document.getElementById('filterCheckName');
-        if (nameEl) nameEl.value = filterVal;
-        const label = document.getElementById('checkGroupLabel');
-        if (label) label.textContent = displayName || 'All Check Groups';
-        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
-        applyAllPrsCheckFilter();
+        _allPrsCheckGroupFilter = filterVal;
+        _allPrsCheckGroupLabel = displayName || 'All Check Groups';
+        applyInsightFilters();
     }
 
     /** Handle click on Bottlenecks doughnut segment – filter by type */
@@ -2563,10 +2610,77 @@
         if (container) renderInsightView(container);
     }
 
+    /** Apply all active insight filters and re-render charts, stats, and table */
+    function applyInsightFilters() {
+        const container = document.getElementById('allPrsContent');
+        if (container && _allPrsData.length) renderInsightView(container);
+    }
+
+    /** Compute filtered PR and bottleneck data based on all active filters */
+    function getFilteredInsightData() {
+        let prs = _allPrsData;
+        let bns = _bottleneckData;
+
+        // Repo filter
+        if (_allPrsRepoFilter) {
+            prs = prs.filter(p => p.repo === _allPrsRepoFilter);
+            bns = bns.filter(b => (b.repo || b.repo_name || '') === _allPrsRepoFilter);
+        }
+
+        // State filter
+        if (_allPrsStateFilters.size > 0) {
+            prs = prs.filter(p => _allPrsStateFilters.has((p.state || '').toLowerCase()));
+        }
+
+        // Check group + result filter (replicates _allPrsCheckFilterFn logic)
+        const filterVal = _allPrsCheckGroupFilter;
+        const checkResult = _allPrsCheckResultFilter;
+
+        if (filterVal || checkResult) {
+            prs = prs.filter(pr => {
+                const prCheckNames = pr.check_names || [];
+                const prFailedChecks = pr.failed_checks || [];
+
+                const isGroupFilter = filterVal.startsWith('group:');
+                const groupName = isGroupFilter ? filterVal.substring(6) : '';
+
+                let matchesFilter, matchesFailed;
+                if (isGroupFilter) {
+                    const groupLower = groupName.toLowerCase();
+                    matchesFilter = (names) => names.some(n => groupCheckName(n).toLowerCase() === groupLower);
+                    matchesFailed = matchesFilter;
+                } else if (filterVal) {
+                    matchesFilter = (names) => names.includes(filterVal);
+                    matchesFailed = matchesFilter;
+                } else {
+                    matchesFilter = () => true;
+                    matchesFailed = () => true;
+                }
+
+                if (filterVal && checkResult === 'failed') return matchesFailed(prFailedChecks);
+                if (filterVal && checkResult === 'passed') return matchesFilter(prCheckNames) && !matchesFailed(prFailedChecks);
+                if (filterVal) {
+                    if (!_allPrsShowAll) return matchesFailed(prFailedChecks);
+                    return matchesFilter(prCheckNames);
+                }
+                if (checkResult === 'failed') return prFailedChecks.length > 0;
+                if (checkResult === 'passed') return prCheckNames.length > 0 && prFailedChecks.length === 0;
+                return true;
+            });
+        }
+
+        // Cross-reference bottlenecks with filtered PRs (for state + check filters)
+        if (_allPrsStateFilters.size > 0 || filterVal || checkResult) {
+            const prKeys = new Set(prs.map(p => `${p.repo}:${p.number}`));
+            bns = bns.filter(b => prKeys.has(`${b.repo || b.repo_name}:${b.pr_number || b.number}`));
+        }
+
+        return { allPrs: prs, bottlenecks: bns };
+    }
+
     /** Orchestrate the PR Insights page: charts (always visible) + toggle + mode-specific table */
     function renderInsightView(container) {
-        const allPrs = _allPrsData;
-        const bottlenecks = _bottleneckData;
+        const { allPrs, bottlenecks } = getFilteredInsightData();
 
         // --- Chart data: Time phases (merged PRs) ---
         const mergedPrs = allPrs.filter(p => p.merged_at);
@@ -2597,10 +2711,10 @@
 
         const chartColors = [
             'rgba(248, 81, 73, 0.85)',  'rgba(255, 166, 87, 0.85)',
-            'rgba(210, 153, 235, 0.85)','rgba(121, 192, 255, 0.85)',
+            'rgba(188, 140, 255, 0.85)','rgba(88, 166, 255, 0.85)',
             'rgba(63, 185, 80, 0.85)',  'rgba(255, 203, 107, 0.85)',
-            'rgba(149, 157, 165, 0.85)','rgba(56, 211, 159, 0.85)',
-            'rgba(219, 107, 142, 0.85)','rgba(110, 135, 206, 0.85)',
+            'rgba(110, 135, 206, 0.85)','rgba(56, 211, 159, 0.85)',
+            'rgba(219, 107, 142, 0.85)','rgba(165, 214, 255, 0.85)',
         ];
 
         // --- Check time impact aggregation ---
@@ -2761,21 +2875,22 @@
                 data: {
                     labels: ['Average'],
                     datasets: [
-                        { label: 'Wait for Review',    data: [+avgWait.toFixed(1)],   backgroundColor: 'rgba(121, 192, 255, 0.85)' },
-                        { label: 'Review \u2192 Approval', data: [+avgReview.toFixed(1)], backgroundColor: 'rgba(255, 166, 87, 0.85)' },
-                        { label: 'Approval \u2192 Merge',  data: [+avgMerge.toFixed(1)],  backgroundColor: 'rgba(63, 185, 80, 0.85)' },
+                        { label: 'Wait for Review',    data: [+avgWait.toFixed(1)],   backgroundColor: 'rgba(121, 192, 255, 0.85)', hoverBackgroundColor: 'rgba(121, 192, 255, 1)', borderRadius: 4, borderSkipped: false },
+                        { label: 'Review \u2192 Approval', data: [+avgReview.toFixed(1)], backgroundColor: 'rgba(255, 166, 87, 0.85)', hoverBackgroundColor: 'rgba(255, 166, 87, 1)', borderRadius: 4, borderSkipped: false },
+                        { label: 'Approval \u2192 Merge',  data: [+avgMerge.toFixed(1)],  backgroundColor: 'rgba(63, 185, 80, 0.85)', hoverBackgroundColor: 'rgba(63, 185, 80, 1)', borderRadius: 4, borderSkipped: false },
                     ],
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 700, easing: 'easeOutQuart' },
                     scales: {
-                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 18 } }, ticks: { color: '#8b949e', font: { size: 18 } }, grid: { color: 'rgba(139,148,158,0.1)' } },
+                        x: { stacked: true, title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 18 } }, ticks: { color: '#8b949e', font: { size: 18 } }, grid: { color: 'rgba(139,148,158,0.08)' }, border: { color: 'rgba(48,54,61,0.5)' } },
                         y: { stacked: true, display: false },
                     },
                     plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 14, padding: 8, font: { size: 18 } } },
+                        legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 14, padding: 8, font: { size: 18 }, usePointStyle: true, pointStyle: 'rectRounded' } },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x} hrs` } },
                     },
                 },
@@ -2790,10 +2905,12 @@
                 type: 'doughnut',
                 data: {
                     labels: pieLabels,
-                    datasets: [{ data: pieCounts, backgroundColor: pieLabels.map((_, i) => chartColors[i % chartColors.length]), borderColor: 'rgba(13,17,23,0.6)', borderWidth: 2 }],
+                    datasets: [{ data: pieCounts, backgroundColor: pieLabels.map((_, i) => chartColors[i % chartColors.length]), hoverBackgroundColor: pieLabels.map((_, i) => chartColors[i % chartColors.length].replace('0.85)', '1)')), borderColor: 'rgba(13,17,23,0.8)', borderWidth: 2, hoverOffset: 6 }],
                 },
                 options: {
                     responsive: true, maintainAspectRatio: true,
+                    cutout: '55%',
+                    animation: { animateRotate: true, duration: 800, easing: 'easeOutQuart' },
                     plugins: {
                         legend: { display: false },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s,v)=>s+v,0); return `${ctx.label}: ${ctx.parsed} PRs (${t>0?((ctx.parsed/t)*100).toFixed(1):0}%)`; } } },
@@ -2835,28 +2952,31 @@
                 data: {
                     labels: impactLabels,
                     datasets: [
-                        { label: 'Failed (hrs)', data: failedHrs, backgroundColor: 'rgba(248, 81, 73, 0.85)', borderRadius: 3 },
-                        { label: 'Passed (hrs)', data: passedHrs, backgroundColor: 'rgba(63, 185, 80, 0.55)', borderRadius: 3 },
+                        { label: 'Failed (hrs)', data: failedHrs, backgroundColor: 'rgba(248, 81, 73, 0.8)', hoverBackgroundColor: 'rgba(248, 81, 73, 1)', borderRadius: 4, borderSkipped: false },
+                        { label: 'Passed (hrs)', data: passedHrs, backgroundColor: 'rgba(63, 185, 80, 0.45)', hoverBackgroundColor: 'rgba(63, 185, 80, 0.7)', borderRadius: 4, borderSkipped: false },
                     ],
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true, maintainAspectRatio: false,
+                    animation: { duration: 700, easing: 'easeOutQuart' },
                     scales: {
                         x: {
                             stacked: true,
                             title: { display: true, text: 'Hours', color: '#8b949e', font: { size: 12 } },
                             ticks: { color: '#8b949e', font: { size: 11 } },
-                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            grid: { color: 'rgba(255,255,255,0.03)' },
+                            border: { color: 'rgba(48,54,61,0.5)' },
                         },
                         y: {
                             stacked: true,
                             ticks: { color: '#c9d1d9', font: { size: 13 } },
                             grid: { display: false },
+                            border: { display: false },
                         },
                     },
                     plugins: {
-                        legend: { display: true, position: 'top', labels: { color: '#c9d1d9', font: { size: 11 }, boxWidth: 12 } },
+                        legend: { display: true, position: 'top', labels: { color: '#c9d1d9', font: { size: 11 }, boxWidth: 12, usePointStyle: true, pointStyle: 'rectRounded' } },
                         tooltip: {
                             ...defaults.plugins.tooltip,
                             callbacks: {
@@ -2881,10 +3001,12 @@
                 type: 'doughnut',
                 data: {
                     labels: bnLabels,
-                    datasets: [{ data: bnCounts, backgroundColor: bnLabels.map((_, i) => chartColors[(i + 3) % chartColors.length]), borderColor: 'rgba(13,17,23,0.6)', borderWidth: 2 }],
+                    datasets: [{ data: bnCounts, backgroundColor: bnLabels.map((_, i) => chartColors[(i + 3) % chartColors.length]), hoverBackgroundColor: bnLabels.map((_, i) => chartColors[(i + 3) % chartColors.length].replace('0.85)', '1)')), borderColor: 'rgba(13,17,23,0.8)', borderWidth: 2, hoverOffset: 6 }],
                 },
                 options: {
                     responsive: true, maintainAspectRatio: true,
+                    cutout: '55%',
+                    animation: { animateRotate: true, duration: 800, easing: 'easeOutQuart' },
                     plugins: {
                         legend: { display: false },
                         tooltip: { ...defaults.plugins.tooltip, callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s,v)=>s+v,0); return `${ctx.label}: ${ctx.parsed} (${t>0?((ctx.parsed/t)*100).toFixed(1):0}%)`; } } },
@@ -3050,11 +3172,21 @@
             }
         });
 
+        // Unique repo names from UNFILTERED data (so dropdown always shows all repos)
+        const allRepoNames = [...new Set(_allPrsData.map(p => p.repo))].filter(Boolean).sort();
+
         container.innerHTML = `
             <!-- Table section -->
             <div class="section-card">
-                        <!-- Check group filter panel -->
+                        <!-- Filter bar -->
                         <div class="d-flex gap-2 align-items-end mb-2 flex-wrap">
+                            <div style="min-width:180px;">
+                                <label class="form-label text-muted small mb-0">Repository</label>
+                                <select class="form-select form-select-sm" id="filterRepo" onchange="_allPrsRepoFilter = this.value; applyInsightFilters();">
+                                    <option value="">All Repos</option>
+                                    ${allRepoNames.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+                                </select>
+                            </div>
                             <div style="min-width:240px; position:relative;" id="checkGroupFilterWrap">
                                 <label class="form-label text-muted small mb-0">Filter by Check Group</label>
                                 <div class="chk-grp-trigger form-select form-select-sm" onclick="toggleCheckGroupPanel()" id="checkGroupTrigger">
@@ -3071,7 +3203,7 @@
                             ${_allPrsShowAll ? `
                             <div style="min-width:140px;">
                                 <label class="form-label text-muted small mb-0">Check Result</label>
-                                <select class="form-select form-select-sm" id="filterCheckResult" onchange="applyAllPrsCheckFilter()">
+                                <select class="form-select form-select-sm" id="filterCheckResult" onchange="_allPrsCheckResultFilter = this.value; applyInsightFilters();">
                                     <option value="">Any</option>
                                     <option value="failed">Failed</option>
                                     <option value="passed">Passed</option>
@@ -3149,9 +3281,9 @@
         // Initialize DataTable
         destroyTable('tableAllPrs');
 
-        // Register custom filter if not already present
+        // Remove old custom filter (filtering is now done upstream in getFilteredInsightData)
         const filterIdx = $.fn.dataTable.ext.search.indexOf(_allPrsCheckFilterFn);
-        if (filterIdx === -1) $.fn.dataTable.ext.search.push(_allPrsCheckFilterFn);
+        if (filterIdx !== -1) $.fn.dataTable.ext.search.splice(filterIdx, 1);
 
         state.dataTables['tableAllPrs'] = $('#tableAllPrs').DataTable({
             pageLength: 25,
@@ -3172,103 +3304,68 @@
         // Style the bottom bar: length + info inline, pagination right
         const bottomRow = dtWrapper.find('.dataTables_info').closest('.d-flex');
         bottomRow.find('.dataTables_paginate').addClass('ms-auto');
-    }
 
-    /** Custom DataTables filter function for check group/name and state filters */
-    function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
-        if (settings.nTable.id !== 'tableAllPrs') return true;
+        // --- Restore filter UI state after re-render ---
+        const repoEl = document.getElementById('filterRepo');
+        if (repoEl) repoEl.value = _allPrsRepoFilter;
 
-        const filterVal = (document.getElementById('filterCheckName')?.value || '').trim();
-        const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
-        const hasStateFilter = _allPrsStateFilters.size > 0;
-        if (!filterVal && !checkResult && !hasStateFilter) return true;
+        const resultEl = document.getElementById('filterCheckResult');
+        if (resultEl) resultEl.value = _allPrsCheckResultFilter;
 
-        // dataIndex maps 1:1 with _allPrsDisplayData (rows are generated in order)
-        const pr = _allPrsDisplayData[dataIndex];
-        if (!pr) return false;
-
-        // State filter: if any state buttons are active, PR must match one of them
-        if (hasStateFilter && !_allPrsStateFilters.has((pr.state || '').toLowerCase())) return false;
-
-        const prCheckNames = pr.check_names || [];
-        const prFailedChecks = pr.failed_checks || [];
-
-        // Determine if filtering by group or individual check
-        const isGroupFilter = filterVal.startsWith('group:');
-        const groupName = isGroupFilter ? filterVal.substring(6) : '';
-
-        // Resolve which raw check names match the filter (case-insensitive group comparison)
-        let matchesFilter;
-        if (isGroupFilter) {
-            const groupLower = groupName.toLowerCase();
-            matchesFilter = (names) => names.some(n => groupCheckName(n).toLowerCase() === groupLower);
-            var matchesFailed = matchesFilter;
-        } else if (filterVal) {
-            // Exact individual check name match
-            matchesFilter = (names) => names.includes(filterVal);
-            var matchesFailed = matchesFilter;
-        } else {
-            matchesFilter = () => true;
-            var matchesFailed = () => true;
+        if (_allPrsStateFilters.size > 0) {
+            document.querySelectorAll('.btn-state-filter').forEach(btn => {
+                if (_allPrsStateFilters.has(btn.dataset.state)) btn.classList.add('active');
+            });
         }
 
-        if (filterVal && checkResult === 'failed') return matchesFailed(prFailedChecks);
-        if (filterVal && checkResult === 'passed') return matchesFilter(prCheckNames) && !matchesFailed(prFailedChecks);
-        if (filterVal) {
-            if (!_allPrsShowAll) return matchesFailed(prFailedChecks);
-            return matchesFilter(prCheckNames);
+        if (_allPrsCheckGroupFilter) {
+            const nameEl = document.getElementById('filterCheckName');
+            if (nameEl) nameEl.value = _allPrsCheckGroupFilter;
+            const label = document.getElementById('checkGroupLabel');
+            if (label) label.textContent = _allPrsCheckGroupLabel || _allPrsCheckGroupFilter;
         }
-        if (checkResult === 'failed') return prFailedChecks.length > 0;
-        if (checkResult === 'passed') return prCheckNames.length > 0 && prFailedChecks.length === 0;
-        return true;
-    }
 
-    /** Apply the check group/name filters and redraw the table */
-    function applyAllPrsCheckFilter() {
-        const dt = state.dataTables['tableAllPrs'];
-        if (dt) {
-            dt.draw();
-            const info = dt.page.info();
-            const countEl = document.getElementById('allPrsFilterCount');
-            if (countEl) {
-                const filterVal = document.getElementById('filterCheckName')?.value;
-                const checkResult = document.getElementById('filterCheckResult')?.value;
-                if (filterVal || checkResult || _allPrsStateFilters.size > 0) {
-                    countEl.textContent = `Showing ${info.recordsDisplay} of ${info.recordsTotal}`;
-                } else {
-                    countEl.textContent = '';
-                }
+        // Update filter count display
+        const countEl = document.getElementById('allPrsFilterCount');
+        if (countEl) {
+            const hasAnyFilter = _allPrsRepoFilter || _allPrsStateFilters.size > 0 || _allPrsCheckGroupFilter || _allPrsCheckResultFilter;
+            if (hasAnyFilter) {
+                countEl.textContent = `Showing ${displayPrs.length} of ${_allPrsData.length}`;
+            } else {
+                countEl.textContent = '';
             }
         }
     }
 
-    /** Clear check filters */
-    function clearAllPrsCheckFilter() {
-        const nameEl = document.getElementById('filterCheckName');
-        const resultEl = document.getElementById('filterCheckResult');
-        if (nameEl) nameEl.value = '';
-        if (resultEl) resultEl.value = '';
-        // Reset panel label and active state
-        const label = document.getElementById('checkGroupLabel');
-        if (label) label.textContent = 'All Check Groups';
-        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
-        // Reset state filter buttons
-        _allPrsStateFilters.clear();
-        document.querySelectorAll('.btn-state-filter.active').forEach(el => el.classList.remove('active'));
-        applyAllPrsCheckFilter();
+    /** Custom DataTables filter function – now a no-op since filtering is done upstream */
+    function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
+        return true;
     }
 
-    /** Toggle a PR state filter button (multi-select) */
+    /** Legacy: kept for backward compat, now delegates to full re-render */
+    function applyAllPrsCheckFilter() {
+        applyInsightFilters();
+    }
+
+    /** Clear all insight filters and re-render */
+    function clearAllPrsCheckFilter() {
+        _allPrsRepoFilter = '';
+        _allPrsCheckGroupFilter = '';
+        _allPrsCheckGroupLabel = '';
+        _allPrsCheckResultFilter = '';
+        _allPrsStateFilters.clear();
+        applyInsightFilters();
+    }
+
+    /** Toggle a PR state filter button (multi-select) and re-render */
     function toggleStateFilter(btn) {
         const st = btn.dataset.state;
         if (_allPrsStateFilters.has(st)) {
             _allPrsStateFilters.delete(st);
-            btn.classList.remove('active');
         } else {
             _allPrsStateFilters.add(st);
-            btn.classList.add('active');
         }
-        applyAllPrsCheckFilter();
+        applyInsightFilters();
     }
 
     /** Toggle the check-group dropdown panel open/closed */
@@ -3291,21 +3388,13 @@
     /** Select a check group/individual check from the panel */
     function selectCheckGroupFilter(el) {
         const filterVal = el.dataset.filter ?? el.getAttribute('data-filter') ?? '';
-        const nameEl = document.getElementById('filterCheckName');
-        if (nameEl) nameEl.value = filterVal;
+        _allPrsCheckGroupFilter = filterVal;
+        _allPrsCheckGroupLabel = filterVal ? el.querySelector('.chk-grp-name')?.textContent || filterVal : 'All Check Groups';
 
-        // Update trigger label
-        const label = document.getElementById('checkGroupLabel');
-        if (label) label.textContent = filterVal ? el.querySelector('.chk-grp-name')?.textContent || filterVal : 'All Check Groups';
-
-        // Mark active
-        document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
-        if (filterVal) el.classList.add('active');
-
-        // Close panel and apply filter
+        // Close panel and apply filter (full re-render)
         const panel = document.getElementById('checkGroupPanel');
         if (panel) panel.style.display = 'none';
-        applyAllPrsCheckFilter();
+        applyInsightFilters();
     }
 
     // Close check-group panel when clicking outside
@@ -3554,8 +3643,16 @@
                     datasets: [{
                         label: 'Cycle Time (hours)',
                         data: slowest.map(p => round(p.total_cycle_time_hours)),
-                        backgroundColor: slowest.map(p => cycleColor(p.total_cycle_time_hours)),
-                        borderRadius: 4,
+                        backgroundColor: (ctx) => {
+                            const v = slowest[ctx.dataIndex]?.total_cycle_time_hours || 0;
+                            const c = cycleColor(v);
+                            return hBarGradient(ctx, c.replace('0.85)', '0.4)'), c);
+                        },
+                        hoverBackgroundColor: slowest.map(p => cycleColor(p.total_cycle_time_hours)),
+                        borderColor: slowest.map(p => cycleColor(p.total_cycle_time_hours)),
+                        borderWidth: { top: 0, bottom: 0, right: 2, left: 0 },
+                        borderRadius: 5,
+                        borderSkipped: false,
                     }],
                 },
                 options: {
@@ -3604,26 +3701,34 @@
                         {
                             label: 'Time to First Review',
                             data: breakdownPrs.map(p => round(p.time_to_first_review_hours || 0)),
-                            backgroundColor: '#58a6ff',
-                            borderRadius: 2,
+                            backgroundColor: 'rgba(88, 166, 255, 0.8)',
+                            hoverBackgroundColor: 'rgba(88, 166, 255, 1)',
+                            borderRadius: 3,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Review to Approval',
                             data: breakdownPrs.map(p => round(p.first_review_to_approval_hours || 0)),
-                            backgroundColor: '#3fb9a8',
-                            borderRadius: 2,
+                            backgroundColor: 'rgba(63, 185, 168, 0.8)',
+                            hoverBackgroundColor: 'rgba(63, 185, 168, 1)',
+                            borderRadius: 3,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Approval to Merge',
                             data: breakdownPrs.map(p => round(p.approval_to_merge_hours || 0)),
-                            backgroundColor: '#bc8cff',
-                            borderRadius: 2,
+                            backgroundColor: 'rgba(188, 140, 255, 0.8)',
+                            hoverBackgroundColor: 'rgba(188, 140, 255, 1)',
+                            borderRadius: 3,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Rework / Unattributed',
                             data: breakdownPrs.map(p => round(p.unattributed_hours || 0)),
-                            backgroundColor: '#f0883e',
-                            borderRadius: 2,
+                            backgroundColor: 'rgba(240, 136, 62, 0.8)',
+                            hoverBackgroundColor: 'rgba(240, 136, 62, 1)',
+                            borderRadius: 3,
+                            borderSkipped: false,
                         },
                     ],
                 },
@@ -3670,17 +3775,21 @@
                         datasets: [{
                             data: bnLabels.map(l => bnCounts[l]),
                             backgroundColor: bnLabels.map((_, i) => pieColors[i % pieColors.length]),
-                            borderColor: '#161b22',
+                            hoverBackgroundColor: bnLabels.map((_, i) => pieColors[i % pieColors.length]),
+                            borderColor: 'rgba(22,27,34,0.8)',
                             borderWidth: 2,
+                            hoverOffset: 6,
                         }],
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        cutout: '50%',
+                        animation: { animateRotate: true, duration: 800, easing: 'easeOutQuart' },
                         plugins: {
                             legend: {
                                 position: 'right',
-                                labels: { color: '#c9d1d9', padding: 16, font: { size: 12 } },
+                                labels: { color: '#c9d1d9', padding: 16, font: { size: 12 }, usePointStyle: true, pointStyle: 'rectRounded' },
                             },
                             tooltip: dflt.plugins.tooltip,
                         },

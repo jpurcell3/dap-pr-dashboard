@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from typing import Any
 
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 SSL_VERIFY = os.environ.get("SSL_VERIFY", "false").lower() not in ("false", "0", "no")
-HTTP_TIMEOUT = 15  # seconds
+HTTP_TIMEOUT = 8  # seconds (per request)
 
 if not SSL_VERIFY:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -205,23 +206,29 @@ def fetch_test_report(build_url: str) -> dict[str, Any] | None:
 def fetch_build_details(build_url: str) -> dict[str, Any] | None:
     """Fetch all available Jenkins data for a single build URL.
 
-    Returns a combined dict with ``build``, ``stages``, ``test_report`` keys,
-    or *None* if Jenkins is unreachable / not configured.
+    Fires build-info, stages, and test-report requests **in parallel**
+    to minimise wall-clock time.  Returns a combined dict with ``build``,
+    ``stages``, ``test_report`` keys, or *None* if Jenkins is unreachable
+    / not configured.
     """
     if not is_configured():
         return None
 
     norm_url = normalize_build_url(build_url)
-    build_info = fetch_build_info(norm_url)
+
+    # Fire all three requests concurrently
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_build = pool.submit(fetch_build_info, norm_url)
+        fut_stages = pool.submit(fetch_stages, norm_url)
+        fut_tests = pool.submit(fetch_test_report, norm_url)
+
+    build_info = fut_build.result()
     if not build_info:
         return None
-
-    stages = fetch_stages(norm_url)
-    test_report = fetch_test_report(norm_url)
 
     return {
         "build_url": norm_url,
         "build": build_info,
-        "stages": stages,
-        "test_report": test_report,
+        "stages": fut_stages.result(),
+        "test_report": fut_tests.result(),
     }

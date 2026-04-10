@@ -2815,7 +2815,7 @@
 
         // --- Bottlenecks mode widget (merged time + doughnut) ---
         } else {
-            const totalFlags = new Set(bottlenecks.map(b => `${b.repo}/${b.pr_number}`)).size;
+            const totalFlags = bottlenecks.length;
             const highCount  = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
             const medCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
             const lowCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;
@@ -2831,7 +2831,7 @@
                         </button>
                     </div>
                     <div class="d-flex gap-3 text-end">
-                        <div><span class="text-info fw-bold">${totalFlags}</span> <span class="text-muted small">PRs</span></div>
+                        <div><span class="text-muted small">Count:</span> <span class="text-info fw-bold">${totalFlags}</span></div>
                         <div><span class="fw-bold" style="color:var(--accent-red);">${highCount}</span> <span class="text-muted small">high</span></div>
                         <div><span class="fw-bold" style="color:var(--accent-yellow);">${medCount}</span> <span class="text-muted small">med</span></div>
                         <div><span class="fw-bold" style="color:var(--accent-blue);">${lowCount}</span> <span class="text-muted small">low</span></div>

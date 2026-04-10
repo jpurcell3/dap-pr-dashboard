@@ -1254,7 +1254,7 @@
     }
 
     /** Render Ticket check output as summary + error table (inline, no expansion).
-     *  Expects output_summary to be a JSON string with {type:"ticket", header, summary, errors[]}.
+     *  Expects output_summary to be a JSON string with {type:"ticket", summary, errors[]}.
      *  Falls back to plain text if JSON parsing fails. */
     function formatTicketOutput(text) {
         if (!text) return '';
@@ -1263,20 +1263,16 @@
         if (!data || data.type !== 'ticket') return esc(text);
 
         let html = '';
-        if (data.header) {
-            html += `<div class="text-muted" style="font-size:0.78rem;">${esc(data.header)}</div>`;
-        }
         if (data.summary) {
             html += `<div class="text-danger fw-bold" style="font-size:0.82rem;">${esc(data.summary)}</div>`;
         }
         if (data.errors && data.errors.length > 0) {
             html += `<table class="table table-sm table-dark-custom mt-1 mb-0" style="font-size:0.75rem;">
-                <thead><tr><th>Commit</th><th>Message</th><th>Submodule</th></tr></thead>
+                <thead><tr><th>Commit</th><th>Message</th></tr></thead>
                 <tbody>
                     ${data.errors.map(e => `<tr>
-                        <td><code style="font-size:0.72rem; color:#58a6ff;">${esc((e.commit || '').substring(0, 10))}</code></td>
+                        <td><code style="font-size:0.72rem; color:#58a6ff;">${esc(e.commit || '')}</code></td>
                         <td>${esc(e.message || '')}</td>
-                        <td>${esc(e.submodule || '')}</td>
                     </tr>`).join('')}
                 </tbody>
             </table>`;

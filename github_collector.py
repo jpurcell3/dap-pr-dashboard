@@ -779,72 +779,55 @@ def _is_ticket_check(check_name: str) -> bool:
 def _extract_ticket_summary(raw_summary: str) -> str:
     """Extract structured data from a Ticket check output.
 
-    Returns a JSON string with the format::
+    Parses the raw HTML to pull the summary line and error table rows
+    from the ``<details>`` section.  Returns a JSON string::
 
         {"type": "ticket",
-         "header": "Checking for Required Tickets ...",
-         "summary": "5 errors, 0 warnings",
-         "errors": [{"commit": "abc123", "message": "...", "submodule": "No"}, ...]}
+         "summary": "2 errors, 0 warnings",
+         "errors": [{"commit": "abc123", "message": "No tickets specified"}, ...]}
 
-    The frontend can detect ``"type":"ticket"`` and render an expandable
+    The frontend can detect ``"type":"ticket"`` and render an inline
     table.  Falls back to plain text if parsing fails.
     """
     if not raw_summary:
         return ""
-    text = _strip_html(raw_summary)
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-    header = ""
+    # --- 1. Extract the summary line (e.g. "2 errors, 0 warnings") ---
+    # Appears in bold: **Summary: 2 errors, 0 warnings**
     summary_line = ""
+    m = re.search(r"\*{2}Summary:\s*(.+?)\*{2}", raw_summary)
+    if m:
+        summary_line = m.group(1).strip()
+    else:
+        # Fallback: look in stripped text
+        text = _strip_html(raw_summary)
+        m2 = re.search(r"(?:summary:\s*)?(\d+\s+error\S*.*?\d+\s+warning\S*)", text, re.IGNORECASE)
+        if m2:
+            summary_line = m2.group(1).strip()
+
+    # --- 2. Extract the error table from the first <details> block ---
     errors: list[dict] = []
+    # Find the Errors details section (contains "Errors" in the summary)
+    details_match = re.search(
+        r"<details>\s*<summary>.*?Error.*?</summary>\s*<table>(.*?)</table>",
+        raw_summary, re.DOTALL | re.IGNORECASE,
+    )
+    if details_match:
+        table_html = details_match.group(1)
+        # Parse each <tr> with <td> cells (skip header rows with <th>)
+        for row_match in re.finditer(r"<tr>((?:<td>.*?</td>)+)</tr>", table_html, re.DOTALL):
+            cells = re.findall(r"<td>(.*?)</td>", row_match.group(1), re.DOTALL)
+            if len(cells) >= 2:
+                commit_sha = _strip_html(cells[0]).strip()
+                message = _strip_html(cells[1]).strip()
+                # Shorten SHA to 7 chars for display
+                if re.match(r"^[0-9a-f]{8,40}$", commit_sha):
+                    commit_sha = commit_sha[:7]
+                errors.append({"commit": commit_sha, "message": message})
 
-    # State machine: parse header, then summary, then table rows
-    in_table = False
-    table_headers: list[str] = []
-
-    for ln in lines:
-        lower = ln.lower()
-
-        # Header: "Checking for Required Tickets ..."
-        if "checking for required ticket" in lower:
-            header = ln
-            continue
-
-        # Skip the action context line (GitHub internals, not useful)
-        if lower.startswith("action:") and header and not summary_line:
-            continue
-
-        # Summary: "Summary: 5 errors, 0 warnings"
-        if lower.startswith("summary:") or re.match(r"^\d+\s+error", lower):
-            summary_line = ln
-            continue
-
-        # Table header row (contains "Commit" and "Message")
-        if "commit" in lower and "message" in lower:
-            # Split on 2+ spaces or tab to detect columns
-            table_headers = re.split(r"\s{2,}|\t", ln)
-            in_table = True
-            continue
-
-        # Table separator rows (dashes, pipes)
-        if in_table and re.match(r"^[\-|:\s]+$", ln):
-            continue
-
-        # Table data rows (hex SHA prefix + content)
-        if in_table and re.match(r"^[0-9a-f]{7,40}\b", ln):
-            cols = re.split(r"\s{2,}|\t", ln, maxsplit=2)
-            errors.append({
-                "commit": cols[0] if len(cols) > 0 else "",
-                "message": cols[1] if len(cols) > 1 else "",
-                "submodule": cols[2] if len(cols) > 2 else "",
-            })
-            continue
-
-    # If we got structured data, return JSON
-    if header or summary_line or errors:
-        result = {"type": "ticket"}
-        if header:
-            result["header"] = header
+    # --- 3. Build result ---
+    if summary_line or errors:
+        result: dict = {"type": "ticket"}
         if summary_line:
             result["summary"] = summary_line
         if errors:
@@ -852,7 +835,7 @@ def _extract_ticket_summary(raw_summary: str) -> str:
         return json.dumps(result)
 
     # Fallback: plain text
-    return text
+    return _strip_html(raw_summary)
 
 
 def _is_drp_checker(check_name: str) -> bool:

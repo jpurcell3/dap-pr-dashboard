@@ -19,7 +19,8 @@ from urllib.parse import urlparse
 from flask import Flask, jsonify, render_template, request
 
 from github_collector import (
-    fetch_all_data, get_filtered_repos, get_all_org_repos, load_cache, save_cache,
+    fetch_all_data, fetch_commit_checks, get_github_token,
+    get_filtered_repos, get_all_org_repos, load_cache, save_cache,
     cancel_refresh, RefreshCancelled,
     GITHUB_API_BASE, ORG_NAME, REPO_FILTER,
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
@@ -335,6 +336,56 @@ def _do_refresh(repos=None, since=None, until=None):
             logger.info("Refresh progress: %s (%d/%d)", repo_name, current, total)
 
         raw_prs = fetch_all_data(repos, progress_callback=progress_cb, since=since)
+
+        # --- Re-check pass: re-fetch checks for PRs with pending results ---
+        # Some checks are posted asynchronously minutes after the PR is
+        # created.  Identify PRs that still have pending or very few checks
+        # and re-fetch just their check data.
+        pending_prs: list[tuple[str, dict]] = []   # (repo_name, pr)
+        for repo_name, prs in raw_prs.items():
+            for pr in prs:
+                checks = pr.get("checks", {})
+                if checks.get("pending", 0) > 0:
+                    pending_prs.append((repo_name, pr))
+
+        if pending_prs:
+            delay = 30  # seconds
+            refresh_status_set(
+                "progress",
+                f"Waiting {delay}s to re-check {len(pending_prs)} PR(s) "
+                f"with pending checks...",
+            )
+            logger.info(
+                "Re-check pass: %d PRs with pending checks, waiting %ds",
+                len(pending_prs), delay,
+            )
+            time.sleep(delay)
+
+            refresh_status_set(
+                "progress",
+                f"Re-fetching checks for {len(pending_prs)} PR(s)...",
+            )
+            recheck_token = get_github_token()
+            for i, (repo_name, pr) in enumerate(pending_prs, 1):
+                try:
+                    commits = pr.get("commits", [])
+                    if not commits:
+                        continue
+                    head_sha = commits[-1]["sha"]
+                    pr["checks"] = fetch_commit_checks(
+                        repo_name, head_sha, token=recheck_token,
+                    )
+                    logger.debug(
+                        "Re-check %s#%d: %d checks (%d failures)",
+                        repo_name, pr["number"],
+                        pr["checks"]["total"], pr["checks"]["failure"],
+                    )
+                except Exception:
+                    logger.debug(
+                        "Re-check failed for %s#%d",
+                        repo_name, pr.get("number"), exc_info=True,
+                    )
+            logger.info("Re-check pass complete: updated %d PRs", len(pending_prs))
 
         # Apply "until" filter: remove PRs created after the until date
         if until:

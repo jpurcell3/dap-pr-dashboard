@@ -1253,6 +1253,33 @@
         return (name || '').trim().toLowerCase() === 'ticket';
     }
 
+    /** Check if a check name is the PR Validation Check */
+    function isPrValidationCheck(name) {
+        return (name || '').trim().toLowerCase() === 'pr validation check';
+    }
+
+    /** Render PR Validation Check output as a compact test results summary.
+     *  Expects output_summary to be a JSON string with {type:"pr_validation", ...}.
+     *  Falls back to plain text if JSON parsing fails. */
+    function formatPrValidation(text) {
+        if (!text) return '';
+        let d;
+        try { d = JSON.parse(text); } catch { return esc(text); }
+        if (!d || d.type !== 'pr_validation') return esc(text);
+
+        const hasFailed = d.test_failed > 0;
+        const stateClass = hasFailed ? 'text-danger' : 'text-success';
+        let html = `<span class="${stateClass}" style="font-size:0.78rem;">`;
+        html += `<strong>Tests:</strong> ${d.test_passed}/${d.test_total} passed`;
+        if (d.test_failed > 0) html += `, <span class="text-danger">${d.test_failed} failed</span>`;
+        if (d.test_skipped > 0) html += `, ${d.test_skipped} skipped`;
+        html += `</span>`;
+        if (d.triggered_by) {
+            html += `<span class="ms-2 text-muted" style="font-size:0.72rem;">by ${esc(d.triggered_by)}</span>`;
+        }
+        return html;
+    }
+
     /** Render Ticket check output as summary + error table (inline, no expansion).
      *  Expects output_summary to be a JSON string with {type:"ticket", summary, errors[]}.
      *  Falls back to plain text if JSON parsing fails. */
@@ -3612,7 +3639,13 @@
                                             ? formatDrpFailedChecks(c.output_summary)
                                             : isTicketCheck(c.name)
                                             ? formatTicketOutput(c.output_summary)
+                                            : isPrValidationCheck(c.name)
+                                            ? formatPrValidation(c.output_summary)
                                             : `<span class="ms-1">${esc(filterFailureLines(c.output_summary)).replace(/\n/g, '<br>')}</span>`) : ''}
+                                    </div>` : ''}
+                                ${c.conclusion !== 'failure' && isPrValidationCheck(c.name) && c.output_summary ? `
+                                    <div class="check-failure-detail" style="border-left-color:#3fb950;">
+                                        ${formatPrValidation(c.output_summary)}
                                     </div>` : ''}
                             `).join('')}
                             ${hiddenCount > 0 ? `

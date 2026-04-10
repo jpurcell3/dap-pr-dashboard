@@ -574,25 +574,45 @@ def fetch_commit_checks(
     headers = _build_headers(token)
 
     def _fetch_check_runs() -> list[dict]:
-        """GitHub Apps check-runs."""
+        """GitHub Apps check-runs (paginated, deduplicated)."""
         results: list[dict] = []
         try:
-            url = (
+            url: str | None = (
                 f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
                 f"/commits/{sha}/check-runs"
             )
             headers_cr = {**headers, "Accept": "application/vnd.github.v3+json"}
-            resp = requests.get(
-                url, headers=headers_cr, verify=SSL_VERIFY, timeout=HTTP_TIMEOUT
-            )
-            _check_rate_limit(resp)
-            resp.raise_for_status()
-            data = resp.json()
-            for cr in data.get("check_runs", []):
+            params: dict = {"per_page": 100}
+            raw_runs: list[dict] = []
+            while url:
+                _check_cancelled()
+                resp = requests.get(
+                    url, headers=headers_cr, params=params,
+                    verify=SSL_VERIFY, timeout=HTTP_TIMEOUT,
+                )
+                _check_rate_limit(resp)
+                resp.raise_for_status()
+                data = resp.json()
+                raw_runs.extend(data.get("check_runs", []))
+                url = resp.links.get("next", {}).get("url")
+                params = {}  # params are baked into the next URL
+
+            # Deduplicate: keep only the latest run per check name.
+            # Multiple runs of the same check can exist when re-triggered.
+            latest_by_name: dict[str, dict] = {}
+            for cr in raw_runs:
+                name = cr.get("name", "")
+                completed = cr.get("completed_at") or ""
+                prev = latest_by_name.get(name)
+                if prev is None or completed > (prev.get("completed_at") or ""):
+                    latest_by_name[name] = cr
+            deduped_runs = list(latest_by_name.values())
+
+            for cr in deduped_runs:
                 conclusion = (cr.get("conclusion") or "pending").lower()
                 check_name = cr.get("name", "")
-                raw_summary = (cr.get("output") or {}).get("summary", "")
-                raw_title = (cr.get("output") or {}).get("title", "")
+                raw_summary = (cr.get("output") or {}).get("summary") or ""
+                raw_title = (cr.get("output") or {}).get("title") or ""
                 # DRP Checkers: keep only the overall status + failed sub-checks.
                 if _is_drp_checker(check_name):
                     summary_text = _extract_drp_failures(raw_summary)
@@ -602,6 +622,9 @@ def fetch_commit_checks(
                 # SonarQube: extract Quality Gate section only.
                 elif _is_sonarqube_check(check_name):
                     summary_text = _extract_sonarqube_summary(raw_summary)
+                # PR Validation Check: extract test execution results.
+                elif _is_pr_validation_check(check_name):
+                    summary_text = _extract_pr_validation(raw_summary)
                 # Security scan checks: extract only the Summary section,
                 # discarding verbose tool descriptions and boilerplate.
                 elif _is_summary_only_check(check_name):
@@ -629,7 +652,7 @@ def fetch_commit_checks(
         return results
 
     def _fetch_commit_statuses() -> list[dict]:
-        """Classic commit statuses."""
+        """Classic commit statuses (deduplicated to latest per context)."""
         results: list[dict] = []
         try:
             url = (
@@ -640,9 +663,18 @@ def fetch_commit_checks(
             _check_rate_limit(resp)
             resp.raise_for_status()
             status_data = resp.json()
+            # The /status endpoint returns ALL historical statuses.
+            # Deduplicate: keep only the latest per context (like the
+            # combined status endpoint does).  Statuses are returned
+            # newest-first, so the first occurrence per context wins.
+            seen_contexts: set[str] = set()
             for s in status_data.get("statuses", []):
+                ctx = s.get("context", "")
+                if ctx in seen_contexts:
+                    continue
+                seen_contexts.add(ctx)
                 results.append({
-                    "name": s.get("context", ""),
+                    "name": ctx,
                     "status": "completed",
                     "conclusion": s.get("state", "pending"),
                     "details_url": s.get("target_url", ""),
@@ -690,6 +722,8 @@ def fetch_commit_checks(
 
 def _strip_html(text: str) -> str:
     """Remove HTML tags from a string (best-effort)."""
+    if not text:
+        return ""
     return re.sub(r"<[^>]+>", "", text).strip()
 
 
@@ -713,6 +747,90 @@ def _is_summary_only_check(check_name: str) -> bool:
     output should be trimmed to the Summary section only."""
     lower = check_name.lower()
     return any(kw in lower for kw in _SUMMARY_ONLY_KEYWORDS)
+
+
+def _is_pr_validation_check(check_name: str) -> bool:
+    """Return True if *check_name* is the PR Validation Check."""
+    return check_name.strip().lower() == "pr validation check"
+
+
+def _extract_pr_validation(raw_summary: str) -> str:
+    """Extract test execution data from a PR Validation Check output.
+
+    The output is a markdown table with rows like::
+
+        | Test Execution State | COMPLETED_SUCCESSFULLY__Total_13__Passed_13__Failed_0__Skipped_0_ |
+        | Test Execution URL   | https___osj_isg_01_prd_...                                       |
+
+    Returns a JSON string with structured fields that the UI can render.
+    Falls back to stripped text if parsing fails.
+    """
+    if not raw_summary:
+        return ""
+
+    # Parse key-value pairs from the markdown table.
+    # Rows are: | Component | Details | Comments |
+    kv: dict[str, str] = {}
+    for line in raw_summary.splitlines():
+        cells = [c.strip() for c in line.split("|")]
+        # After split, a row like "  | A | B | C |" produces
+        # ['', 'A', 'B', 'C', ''].  Skip header/separator rows.
+        if len(cells) < 4:
+            continue
+        key = cells[1]
+        val = cells[2]
+        if not key or not val or key.startswith("---") or val.startswith("---"):
+            continue
+        if key.lower() in ("components",):
+            continue
+        kv[key] = val
+
+    state_raw = kv.get("Test Execution State", "")
+    url_raw = kv.get("Test Execution URL", "")
+    result_raw = kv.get("Test Execution Result", "")
+    triggered_by = kv.get("Triggered By", "")
+
+    if not state_raw:
+        # No test execution data found; return empty
+        return ""
+
+    # Decode test execution state:
+    #   COMPLETED_SUCCESSFULLY__Total_13__Passed_13__Failed_0__Skipped_0_
+    test_state = ""
+    total = passed = failed = skipped = 0
+    state_match = re.match(r"^([A-Z_]+?)__Total_(\d+)__Passed_(\d+)__Failed_(\d+)__Skipped_(\d+)", state_raw)
+    if state_match:
+        test_state = state_match.group(1).replace("_", " ").strip()
+        total = int(state_match.group(2))
+        passed = int(state_match.group(3))
+        failed = int(state_match.group(4))
+        skipped = int(state_match.group(5))
+    else:
+        # Fallback: use the raw state decoded
+        test_state = state_raw.replace("_", " ").strip()
+
+    # Decode URL:  https___host_path → best-effort reconstruction.
+    # The encoding is lossy (single _ replaces dots, slashes, hyphens)
+    # so we store the raw value for reference.
+    test_url = url_raw
+
+    # Decode test result:
+    #   Test_Pass_Percentage_100_is_above_the_defined_threshold_95
+    test_result = result_raw.replace("_", " ").strip() if result_raw else ""
+
+    payload = {
+        "type": "pr_validation",
+        "test_state": test_state,
+        "test_total": total,
+        "test_passed": passed,
+        "test_failed": failed,
+        "test_skipped": skipped,
+        "test_url": test_url,
+        "test_result": test_result,
+        "triggered_by": triggered_by,
+    }
+
+    return json.dumps(payload)
 
 
 def _is_sonarqube_check(check_name: str) -> bool:

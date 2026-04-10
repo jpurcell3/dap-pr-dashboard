@@ -470,6 +470,10 @@ def _do_refresh(repos=None, since=None, until=None):
         refresh_status_bulk_set({"progress": "Complete!", "running": False})
         logger.info("Refresh complete: %d repos, %d PRs", len(repos), total_prs)
 
+        # Backfill Jenkins results for any checks the sync missed
+        # (e.g. Jenkins was briefly unreachable during the sync).
+        _backfill_jenkins_results()
+
     except RefreshCancelled:
         logger.info("Refresh cancelled by user.")
         refresh_status_bulk_set({
@@ -993,10 +997,92 @@ def api_jenkins_build():
 
 
 # ---------------------------------------------------------------------------
+# Jenkins result backfill
+# ---------------------------------------------------------------------------
+
+def _backfill_jenkins_results():
+    """Enrich cached Jenkins checks that are missing ``jenkins_result``.
+
+    Runs in a background thread so it never blocks startup or the sync
+    response.  When finished, recomputes metrics and saves the cache only
+    if at least one check was enriched.
+    """
+    if not jenkins_is_configured():
+        return
+    if not data_store_loaded():
+        return
+
+    raw_prs = data_store_get("raw_prs", {})
+    # Collect checks that need enrichment
+    tasks: list[dict] = []
+    for prs in raw_prs.values():
+        if not isinstance(prs, list):
+            continue
+        for pr in prs:
+            checks = pr.get("checks")
+            if not isinstance(checks, dict):
+                continue
+            for c in checks.get("checks", []):
+                if (
+                    c.get("name", "").startswith("continuous-integration/jenkins/")
+                    and c.get("details_url")
+                    and not c.get("jenkins_result")
+                ):
+                    tasks.append(c)
+
+    if not tasks:
+        return
+
+    logger.info("Jenkins backfill: %d checks to enrich", len(tasks))
+
+    def _run():
+        from jenkins_client import fetch_build_info
+        from concurrent.futures import ThreadPoolExecutor
+
+        enriched = 0
+        def _fetch(check):
+            try:
+                info = fetch_build_info(check["details_url"])
+                if info and info.get("result"):
+                    check["jenkins_result"] = info["result"]
+                    return True
+            except Exception:
+                pass
+            return False
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(_fetch, tasks))
+        enriched = sum(1 for r in results if r)
+
+        if enriched == 0:
+            logger.info("Jenkins backfill: no new results (0/%d reachable)", len(tasks))
+            return
+
+        logger.info("Jenkins backfill: enriched %d/%d checks, recomputing metrics", enriched, len(tasks))
+        all_metrics = compute_all_metrics(raw_prs)
+        cache_payload = {
+            "raw_prs": raw_prs,
+            "repo_summaries": all_metrics["repo_summaries"],
+            "pr_metrics": all_metrics["pr_metrics"],
+            "bottlenecks": all_metrics["bottlenecks"],
+        }
+        data_store_update(cache_payload)
+        data_store_set("loaded", True)
+        save_cache(cache_payload, CACHE_PATH)
+        logger.info("Jenkins backfill complete — cache saved")
+
+    thread = threading.Thread(target=_run, daemon=True, name="jenkins-backfill")
+    thread.start()
+
+
+# ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------
 # Load cache into memory when the module is first imported / the app starts.
 _load_cache_into_store()
+
+# Backfill any Jenkins checks missing jenkins_result (runs in background).
+_backfill_jenkins_results()
 
 # Clear stale refresh state left over from a previous crash / restart.
 # If Redis says "running" but no thread is actually active, reset it.

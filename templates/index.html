@@ -2795,7 +2795,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-0" style="cursor:pointer;" onclick="toggleTimeImpact()">
                         <h6 class="text-muted mb-0">
                             <i class="bi bi-chevron-down me-1" id="timeImpactChevron" style="transition:transform 0.2s;"></i>
-                            <i class="bi bi-clock-history me-1"></i>Failed Check Impact
+                            <i class="bi bi-clock-history me-1"></i>Check Test Impact
                         </h6>
                         <div class="d-flex gap-3">
                             <span class="text-danger small fw-bold">${totalFailedTime.toFixed(1)} hrs</span>
@@ -3052,7 +3052,7 @@
 
     /** Toggle between failures-only and all-PRs view */
     let _timeImpactCollapsed = false;
-    /** Toggle the Failed Check Impact chart open/closed */
+    /** Toggle the Check Test Impact chart open/closed */
     function toggleTimeImpact() {
         const body = document.getElementById('timeImpactBody');
         const chevron = document.getElementById('timeImpactChevron');

@@ -2815,7 +2815,7 @@
 
         // --- Bottlenecks mode widget (merged time + doughnut) ---
         } else {
-            const totalFlags = bottlenecks.length;
+            const totalFlags = new Set(bottlenecks.map(b => `${b.repo}/${b.pr_number}`)).size;
             const highCount  = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'high').length;
             const medCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'medium').length;
             const lowCount   = bottlenecks.filter(b => (b.severity || '').toLowerCase() === 'low').length;

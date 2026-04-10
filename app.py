@@ -26,6 +26,7 @@ from github_collector import (
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
 )
 from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
+from jenkins_client import fetch_build_details, is_configured as jenkins_is_configured
 from redis_state import (
     data_store_get, data_store_set, data_store_update,
     data_store_loaded, data_store_snapshot,
@@ -952,6 +953,43 @@ def api_health():
 
     status_code = 200 if healthy else 503
     return jsonify({"status": "healthy" if healthy else "degraded", "checks": checks}), status_code
+
+
+# 9. Jenkins build details -----------------------------------------------------
+# In-memory cache: build_url → {data, fetched_at}
+_jenkins_cache: dict[str, dict] = {}
+_JENKINS_CACHE_TTL = 600  # seconds
+
+@app.route("/api/jenkins/build")
+def api_jenkins_build():
+    """Fetch Jenkins build details (stages, test report) for a build URL.
+
+    Query params:
+        url — full Jenkins build URL (from commit-status target_url)
+
+    Returns JSON with ``build``, ``stages``, and ``test_report`` keys.
+    Results are cached in-memory for 10 minutes.
+    """
+    build_url = request.args.get("url", "").strip()
+    if not build_url:
+        return jsonify({"error": "Missing 'url' query parameter"}), 400
+
+    if not jenkins_is_configured():
+        return jsonify({"error": "Jenkins credentials not configured"}), 503
+
+    # Check in-memory cache
+    cached = _jenkins_cache.get(build_url)
+    if cached and (time.time() - cached["fetched_at"]) < _JENKINS_CACHE_TTL:
+        return jsonify(cached["data"])
+
+    details = fetch_build_details(build_url)
+    if details is None:
+        return jsonify({"error": "Could not reach Jenkins or build not found"}), 502
+
+    # Cache the result
+    _jenkins_cache[build_url] = {"data": details, "fetched_at": time.time()}
+
+    return jsonify(details)
 
 
 # ---------------------------------------------------------------------------

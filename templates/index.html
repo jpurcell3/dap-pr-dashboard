@@ -1294,6 +1294,173 @@
         return html;
     }
 
+    // ---- Jenkins build detail rendering ----
+
+    /** Format milliseconds as a human-readable duration */
+    function fmtDurationMs(ms) {
+        if (!ms || ms <= 0) return '--';
+        const s = Math.round(ms / 1000);
+        if (s < 60) return s + 's';
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        if (m < 60) return m + 'm ' + rem + 's';
+        const h = Math.floor(m / 60);
+        return h + 'h ' + (m % 60) + 'm';
+    }
+
+    /** CSS class for a Jenkins stage status */
+    function jenkinsStageClass(status) {
+        switch ((status || '').toUpperCase()) {
+            case 'SUCCESS': return 'text-success';
+            case 'FAILED': case 'ERROR': return 'text-danger';
+            case 'UNSTABLE': return 'text-warning';
+            case 'NOT_EXECUTED': case 'SKIPPED': return 'text-muted';
+            case 'IN_PROGRESS': return 'text-info';
+            default: return 'text-muted';
+        }
+    }
+
+    /** Icon for a Jenkins stage status */
+    function jenkinsStageIcon(status) {
+        switch ((status || '').toUpperCase()) {
+            case 'SUCCESS': return '<i class="bi bi-check-circle-fill text-success"></i>';
+            case 'FAILED': case 'ERROR': return '<i class="bi bi-x-circle-fill text-danger"></i>';
+            case 'UNSTABLE': return '<i class="bi bi-exclamation-triangle-fill text-warning"></i>';
+            case 'NOT_EXECUTED': case 'SKIPPED': return '<i class="bi bi-dash-circle text-muted"></i>';
+            case 'IN_PROGRESS': return '<i class="bi bi-arrow-repeat text-info"></i>';
+            default: return '<i class="bi bi-question-circle text-muted"></i>';
+        }
+    }
+
+    /** Render a single Jenkins build result into HTML */
+    function renderJenkinsBuild(label, data) {
+        const b = data.build;
+        const resultClass = b.result === 'SUCCESS' ? 'text-success'
+            : b.result === 'FAILURE' ? 'text-danger'
+            : b.result === 'UNSTABLE' ? 'text-warning'
+            : b.result === 'BUILDING' ? 'text-info' : 'text-muted';
+
+        let html = `<div class="mb-3">`;
+        html += `<div class="d-flex align-items-center gap-2 mb-1">`;
+        html += `<strong style="font-size:0.85rem;">${esc(label)}</strong>`;
+        html += `<span class="badge ${b.result === 'SUCCESS' ? 'bg-success' : b.result === 'FAILURE' ? 'bg-danger' : b.result === 'UNSTABLE' ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size:0.7rem;">${esc(b.result)}</span>`;
+        html += `<span class="text-muted" style="font-size:0.75rem;">${fmtDurationMs(b.duration_ms)}</span>`;
+        if (data.build_url) {
+            html += `<a href="${esc(data.build_url)}" target="_blank" class="text-muted" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right"></i></a>`;
+        }
+        html += `</div>`;
+
+        // Pipeline stages
+        if (data.stages && data.stages.length > 0) {
+            // Stage progress bar
+            const total = data.stages.length;
+            const success = data.stages.filter(s => s.status === 'SUCCESS').length;
+            const failed = data.stages.filter(s => ['FAILED','ERROR'].includes(s.status)).length;
+            const notExec = data.stages.filter(s => ['NOT_EXECUTED','SKIPPED'].includes(s.status)).length;
+            const other = total - success - failed - notExec;
+            html += `<div class="checks-summary-bar mb-1">`;
+            if (success) html += `<div class="bar-success" style="width:${(success/total*100).toFixed(1)}%"></div>`;
+            if (other) html += `<div class="bar-pending" style="width:${(other/total*100).toFixed(1)}%"></div>`;
+            if (failed) html += `<div class="bar-failure" style="width:${(failed/total*100).toFixed(1)}%"></div>`;
+            html += `</div>`;
+
+            // Stage list - show failed/unstable first, then collapsible for the rest
+            const failedStages = data.stages.filter(s => ['FAILED','ERROR','UNSTABLE'].includes(s.status));
+            const otherStages = data.stages.filter(s => !['FAILED','ERROR','UNSTABLE'].includes(s.status));
+            const stageRow = (s) => `
+                <div class="d-flex align-items-center gap-2 py-1" style="font-size:0.78rem; border-bottom: 1px solid var(--card-border);">
+                    ${jenkinsStageIcon(s.status)}
+                    <span class="${jenkinsStageClass(s.status)}" style="flex:1;">${esc(s.name)}</span>
+                    <span class="text-muted" style="font-size:0.72rem;">${fmtDurationMs(s.duration_ms)}</span>
+                </div>`;
+
+            if (failedStages.length > 0) {
+                html += failedStages.map(stageRow).join('');
+            }
+            if (otherStages.length > 0) {
+                const id = 'jenkinsStages_' + Math.random().toString(36).slice(2, 8);
+                html += `<div class="text-center mt-1">
+                    <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:0.72rem;" onclick="this.style.display='none'; document.getElementById('${id}').style.display='block';">
+                        <i class="bi bi-eye me-1"></i>${otherStages.length} more stage${otherStages.length !== 1 ? 's' : ''}
+                    </button>
+                </div>`;
+                html += `<div id="${id}" style="display:none;">${otherStages.map(stageRow).join('')}</div>`;
+            }
+        }
+
+        // Test report
+        if (data.test_report) {
+            const tr = data.test_report;
+            const hasFails = tr.fail_count > 0;
+            html += `<div class="mt-2 p-2" style="background:var(--card-bg); border-radius:6px; border: 1px solid var(--card-border);">`;
+            html += `<div class="d-flex align-items-center gap-2" style="font-size:0.8rem;">`;
+            html += `<i class="bi bi-clipboard-check me-1"></i>`;
+            html += `<strong>Tests:</strong>`;
+            html += `<span class="${hasFails ? 'text-danger' : 'text-success'}">${tr.pass_count}/${tr.total_count} passed</span>`;
+            if (tr.fail_count > 0) html += `<span class="text-danger">${tr.fail_count} failed</span>`;
+            if (tr.skip_count > 0) html += `<span class="text-muted">${tr.skip_count} skipped</span>`;
+            html += `<span class="text-muted" style="font-size:0.72rem;">(${(tr.duration_s || 0).toFixed(0)}s)</span>`;
+            html += `</div>`;
+
+            // Failed test details
+            if (tr.failures && tr.failures.length > 0) {
+                html += `<div class="mt-1" style="font-size:0.75rem;">`;
+                tr.failures.slice(0, 10).forEach(f => {
+                    html += `<div class="d-flex gap-2 py-1" style="border-bottom: 1px solid var(--card-border);">`;
+                    html += `<i class="bi bi-x-circle-fill text-danger" style="margin-top:2px;"></i>`;
+                    html += `<div><span class="text-danger">${esc(f.name)}</span>`;
+                    if (f.class_name) html += `<br><span class="text-muted" style="font-size:0.7rem;">${esc(f.class_name)}</span>`;
+                    if (f.error_details) html += `<br><code style="font-size:0.68rem; color: var(--accent-red);">${esc(f.error_details.substring(0, 200))}</code>`;
+                    html += `</div></div>`;
+                });
+                if (tr.failures.length > 10) {
+                    html += `<div class="text-muted py-1">...and ${tr.failures.length - 10} more failed tests</div>`;
+                }
+                html += `</div>`;
+            }
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /** Async-load Jenkins build details for checks in a PR */
+    async function loadJenkinsBuilds(pr) {
+        const contentEl = document.getElementById('jenkinsBuildsContent');
+        if (!contentEl) return;
+
+        const runs = (pr.checks || {}).checks || [];
+        const jenkinsChecks = runs.filter(c =>
+            c.name && c.name.startsWith('continuous-integration/jenkins/') && c.details_url
+        );
+        if (jenkinsChecks.length === 0) return;
+
+        // Fetch all Jenkins builds in parallel
+        const results = await Promise.allSettled(
+            jenkinsChecks.map(async c => {
+                const resp = await fetch(`/api/jenkins/build?url=${encodeURIComponent(c.details_url)}`);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (data.error) return null;
+                // Derive a friendly label from the context name
+                const label = c.name.replace('continuous-integration/jenkins/', '');
+                return { label, data, conclusion: c.conclusion };
+            })
+        );
+
+        const builds = results
+            .filter(r => r.status === 'fulfilled' && r.value)
+            .map(r => r.value);
+
+        if (builds.length === 0) {
+            contentEl.innerHTML = '<div class="text-muted small">Could not load Jenkins build data.</div>';
+            return;
+        }
+
+        contentEl.innerHTML = builds.map(b => renderJenkinsBuild(b.label, b.data)).join('');
+    }
+
     /** Render Ticket check output as summary + error table (inline, no expansion).
      *  Expects output_summary to be a JSON string with {type:"ticket", summary, errors[]}.
      *  Falls back to plain text if JSON parsing fails. */
@@ -3730,6 +3897,20 @@
                         </div>`;
                         })()}
 
+                        <!-- Jenkins Builds (loaded async) -->
+                        ${(() => {
+                            const runs = (pr.checks || {}).checks || [];
+                            const jenkinsChecks = runs.filter(c => c.name && c.name.startsWith('continuous-integration/jenkins/') && c.details_url);
+                            if (jenkinsChecks.length === 0) return '';
+                            return `
+                        <div class="section-card" id="jenkinsBuildsSection">
+                            <h5><i class="bi bi-gear-wide-connected me-2"></i>Jenkins Builds</h5>
+                            <div id="jenkinsBuildsContent">
+                                <div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading build details...</div>
+                            </div>
+                        </div>`;
+                        })()}
+
                         <!-- Commits -->
                         ${(() => {
                             const commits = Array.isArray(pr.commits) ? pr.commits : [];
@@ -3811,6 +3992,9 @@
                 </div>`;
 
             container.innerHTML = html;
+
+            // Async-load Jenkins build details if the section exists
+            loadJenkinsBuilds(pr);
 
         } catch (err) {
             console.error('Failed to load PR detail:', err);

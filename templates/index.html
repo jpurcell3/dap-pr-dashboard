@@ -244,6 +244,20 @@
             color: #fff;
         }
 
+        /* State filter toggle buttons */
+        .btn-state-filter {
+            border: 1px solid var(--card-border);
+            color: #8b949e;
+            background: transparent;
+            font-size: 0.75rem;
+            padding: 0.15rem 0.45rem;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .btn-state-filter:hover { color: #c9d1d9; border-color: #8b949e; }
+        .btn-state-filter.active[data-state="open"]   { background: var(--accent-green); color: #fff; border-color: var(--accent-green); }
+        .btn-state-filter.active[data-state="merged"] { background: var(--accent-purple); color: #fff; border-color: var(--accent-purple); }
+        .btn-state-filter.active[data-state="closed"] { background: var(--accent-red);    color: #fff; border-color: var(--accent-red); }
+
         /* Cycle time color coding */
         .cycle-fast { color: var(--accent-green); font-weight: 600; }
         .cycle-medium { color: var(--accent-yellow); font-weight: 600; }
@@ -2202,6 +2216,7 @@
     let _allPrsData = [];      // raw data from /api/prs
     let _allPrsShowAll = false; // toggle: false = failures only (default), true = all PRs
     let _allPrsDisplayData = []; // the displayPrs array used to build the current table
+    let _allPrsStateFilters = new Set(); // active PR state filters (open, merged, closed)
     let _insightViewMode = 'checks'; // 'checks' or 'severity'
     let _bottleneckData = [];  // cached bottleneck data from /api/bottlenecks
 
@@ -2895,6 +2910,18 @@
                                     <option value="passed">Passed</option>
                                 </select>
                             </div>` : ''}
+                            <div class="d-flex align-items-end gap-1">
+                                <label class="form-label text-muted small mb-0 me-1" style="white-space:nowrap;">State</label>
+                                <button class="btn btn-sm btn-state-filter" data-state="open" onclick="toggleStateFilter(this)" style="height:31px;">
+                                    <i class="bi bi-record-circle me-1"></i>Opn
+                                </button>
+                                <button class="btn btn-sm btn-state-filter" data-state="merged" onclick="toggleStateFilter(this)" style="height:31px;">
+                                    <i class="bi bi-git me-1"></i>Mrg
+                                </button>
+                                <button class="btn btn-sm btn-state-filter" data-state="closed" onclick="toggleStateFilter(this)" style="height:31px;">
+                                    <i class="bi bi-x-circle me-1"></i>Cls
+                                </button>
+                            </div>
                             <button class="btn btn-outline-secondary btn-sm" onclick="clearAllPrsCheckFilter()" style="height:31px;">
                                 <i class="bi bi-x-circle me-1"></i>Clear
                             </button>
@@ -2980,17 +3007,21 @@
         bottomRow.find('.dataTables_paginate').addClass('ms-auto');
     }
 
-    /** Custom DataTables filter function for check group/name filters */
+    /** Custom DataTables filter function for check group/name and state filters */
     function _allPrsCheckFilterFn(settings, data, dataIndex, rowData) {
         if (settings.nTable.id !== 'tableAllPrs') return true;
 
         const filterVal = (document.getElementById('filterCheckName')?.value || '').trim();
         const checkResult = (document.getElementById('filterCheckResult')?.value || '').trim();
-        if (!filterVal && !checkResult) return true;
+        const hasStateFilter = _allPrsStateFilters.size > 0;
+        if (!filterVal && !checkResult && !hasStateFilter) return true;
 
         // dataIndex maps 1:1 with _allPrsDisplayData (rows are generated in order)
         const pr = _allPrsDisplayData[dataIndex];
         if (!pr) return false;
+
+        // State filter: if any state buttons are active, PR must match one of them
+        if (hasStateFilter && !_allPrsStateFilters.has((pr.state || '').toLowerCase())) return false;
 
         const prCheckNames = pr.check_names || [];
         const prFailedChecks = pr.failed_checks || [];
@@ -3035,7 +3066,7 @@
             if (countEl) {
                 const filterVal = document.getElementById('filterCheckName')?.value;
                 const checkResult = document.getElementById('filterCheckResult')?.value;
-                if (filterVal || checkResult) {
+                if (filterVal || checkResult || _allPrsStateFilters.size > 0) {
                     countEl.textContent = `Showing ${info.recordsDisplay} of ${info.recordsTotal}`;
                 } else {
                     countEl.textContent = '';
@@ -3054,6 +3085,22 @@
         const label = document.getElementById('checkGroupLabel');
         if (label) label.textContent = 'All Check Groups';
         document.querySelectorAll('#checkGroupPanel .active').forEach(el => el.classList.remove('active'));
+        // Reset state filter buttons
+        _allPrsStateFilters.clear();
+        document.querySelectorAll('.btn-state-filter.active').forEach(el => el.classList.remove('active'));
+        applyAllPrsCheckFilter();
+    }
+
+    /** Toggle a PR state filter button (multi-select) */
+    function toggleStateFilter(btn) {
+        const st = btn.dataset.state;
+        if (_allPrsStateFilters.has(st)) {
+            _allPrsStateFilters.delete(st);
+            btn.classList.remove('active');
+        } else {
+            _allPrsStateFilters.add(st);
+            btn.classList.add('active');
+        }
         applyAllPrsCheckFilter();
     }
 

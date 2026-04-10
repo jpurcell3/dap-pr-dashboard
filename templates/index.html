@@ -1029,6 +1029,7 @@
         refreshRunning: false,
         githubWebUrl: '',    // populated from /api/config
         githubOrg: '',       // populated from /api/config
+        defaultLookbackDays: 7, // populated from /api/config (DEFAULT_PR_LOOKBACK_DAYS)
     };
 
     // ---------------------------------------------------------------------------
@@ -1753,13 +1754,18 @@
         document.querySelectorAll('.date-pills .btn').forEach(b => b.classList.remove('active'));
     }
 
+    /** Reset the date range back to the server-configured default lookback. */
+    function resetDateToDefault() {
+        setDateRange(state.defaultLookbackDays);
+    }
+
     /** Quick-select date range (N days back from today) */
     function setDateRange(days) {
         const now = new Date();
         const from = new Date();
         from.setDate(now.getDate() - days);
         document.getElementById('filterSince').value = from.toISOString().slice(0, 10);
-        document.getElementById('filterUntil').value = now.toISOString().slice(0, 10);
+        document.getElementById('filterUntil').value = '';
         // Highlight active pill
         document.querySelectorAll('.date-pills .btn').forEach(b => {
             b.classList.toggle('active', parseInt(b.textContent) === days ||
@@ -1817,6 +1823,9 @@
             const sel = document.getElementById(id);
             if (sel) sel.value = teamName || '';
         });
+
+        // Reset date range to the server-configured default
+        resetDateToDefault();
 
         // Repopulate the repo checklist (filtered to team repos)
         populateRepoChecklist();
@@ -4181,13 +4190,14 @@
             const cfg = await apiFetch('/api/config');
             state.githubWebUrl = (cfg.github_web_url || '').replace(/\/+$/, '');
             state.githubOrg = cfg.github_org || '';
+            if (cfg.default_lookback_days != null) state.defaultLookbackDays = cfg.default_lookback_days;
         } catch (e) {
             console.warn('Failed to load config:', e);
         }
 
-        // Default the "From" date to today - 30 days
+        // Default the "From" date to today - N days (from server config)
         const d = new Date();
-        d.setDate(d.getDate() - 30);
+        d.setDate(d.getDate() - state.defaultLookbackDays);
         document.getElementById('filterSince').value = d.toISOString().slice(0, 10);
 
         // Load repo list and teams for filter dropdown (non-blocking)

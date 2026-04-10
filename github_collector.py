@@ -70,6 +70,11 @@ MAX_PRS_PER_REPO = int(os.environ.get("MAX_PRS_PER_REPO", "500"))
 MAX_CONCURRENT_REPOS = int(os.environ.get("MAX_CONCURRENT_REPOS", "4"))
 MAX_CONCURRENT_PRS = int(os.environ.get("MAX_CONCURRENT_PRS", "6"))
 
+# HTTP timeout as (connect, read) in seconds.  A short connect timeout
+# catches unreachable hosts quickly; the read timeout caps how long we
+# wait for a response body.
+HTTP_TIMEOUT = (10, 20)
+
 logger.info(
     "Config loaded — API: %s | Org: %s | Repo filter: %r | SSL verify: %s",
     GITHUB_API_BASE, ORG_NAME, REPO_FILTER or "(none)", SSL_VERIFY,
@@ -236,7 +241,8 @@ def _get_paginated(url: str, headers: dict, params: dict | None = None,
     results: list[dict] = []
 
     while url:
-        response = requests.get(url, headers=headers, params=params, timeout=30, verify=SSL_VERIFY)
+        _check_cancelled()
+        response = requests.get(url, headers=headers, params=params, timeout=HTTP_TIMEOUT, verify=SSL_VERIFY)
         _check_rate_limit(response)
         response.raise_for_status()
         data = response.json()
@@ -371,9 +377,10 @@ def fetch_prs_for_repo(
         stop_paginating = False
 
         while current_url and not stop_paginating:
+            _check_cancelled()
             response = requests.get(
                 current_url, headers=headers, params=current_params,
-                timeout=30, verify=SSL_VERIFY,
+                timeout=HTTP_TIMEOUT, verify=SSL_VERIFY,
             )
             _check_rate_limit(response)
             response.raise_for_status()
@@ -576,7 +583,7 @@ def fetch_commit_checks(
             )
             headers_cr = {**headers, "Accept": "application/vnd.github.v3+json"}
             resp = requests.get(
-                url, headers=headers_cr, verify=SSL_VERIFY, timeout=30
+                url, headers=headers_cr, verify=SSL_VERIFY, timeout=HTTP_TIMEOUT
             )
             _check_rate_limit(resp)
             resp.raise_for_status()
@@ -629,7 +636,7 @@ def fetch_commit_checks(
                 f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}"
                 f"/commits/{sha}/status"
             )
-            resp = requests.get(url, headers=headers, verify=SSL_VERIFY, timeout=30)
+            resp = requests.get(url, headers=headers, verify=SSL_VERIFY, timeout=HTTP_TIMEOUT)
             _check_rate_limit(resp)
             resp.raise_for_status()
             status_data = resp.json()
@@ -1000,6 +1007,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
 
     # --- helper closures (submitted to pool) --------------------------------
     def _reviews():
+        _check_cancelled()
         try:
             return fetch_pr_reviews(repo_name, pr_number, token=token)
         except Exception:
@@ -1007,6 +1015,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
             return []
 
     def _timeline():
+        _check_cancelled()
         try:
             return fetch_pr_timeline(repo_name, pr_number, token=token)
         except Exception:
@@ -1014,6 +1023,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
             return []
 
     def _comments():
+        _check_cancelled()
         try:
             return fetch_pr_comments(repo_name, pr_number, token=token)
         except Exception:
@@ -1021,6 +1031,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
             return {"review_comments": [], "issue_comments": []}
 
     def _commits():
+        _check_cancelled()
         try:
             return fetch_pr_commits(repo_name, pr_number, token=token)
         except Exception:
@@ -1037,6 +1048,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
         f_comments = pool.submit(_comments)
         f_commits = pool.submit(_commits)
 
+    _check_cancelled()
     pr["reviews"] = f_reviews.result()
     pr["timeline_events"] = f_timeline.result()
     comments = f_comments.result()
@@ -1045,6 +1057,7 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
     pr["commits"] = f_commits.result()
 
     # Checks depend on commits (need HEAD SHA) — fetch sequentially after.
+    _check_cancelled()
     try:
         if pr["commits"]:
             head_sha = pr["commits"][-1]["sha"]
@@ -1068,6 +1081,7 @@ def _enrich_repo(
     PRs within the repo are enriched in parallel (up to
     ``MAX_CONCURRENT_PRS`` at a time).
     """
+    _check_cancelled()
     prs = fetch_prs_for_repo(repo_name, token=token, since=since)
     if not prs:
         return []

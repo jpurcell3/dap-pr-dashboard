@@ -909,6 +909,16 @@ def api_health():
 # Load cache into memory when the module is first imported / the app starts.
 _load_cache_into_store()
 
+# Clear stale refresh state left over from a previous crash / restart.
+# If Redis says "running" but no thread is actually active, reset it.
+if refresh_status_get("running"):
+    logger.warning("Stale refresh state detected on startup — clearing.")
+    refresh_status_bulk_set({
+        "running": False,
+        "progress": "Cleared stale sync on startup",
+        "error": "",
+    })
+
 
 # ---------------------------------------------------------------------------
 # Scheduled auto-refresh

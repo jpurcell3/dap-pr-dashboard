@@ -5,4 +5,8 @@ pr_cache.json
 server.log
 .git/
 .gitignore
+.devin/
 README.md
+USER_GUIDE.md
+SETUP_WINDOWS.md
+start.bat

@@ -861,77 +861,66 @@ def _is_drp_checker(check_name: str) -> bool:
 
 
 def _extract_drp_failures(raw_summary: str) -> str:
-    """Extract the overall status line and only the failed sub-checks from
-    DRP Checkers output.
+    """Extract only the failed sub-check names from DRP Checkers output.
 
-    Uses an inverse approach: lines with a pass/tick marker are considered
-    passing — any other component line (cross, timed_out, unknown emoji,
-    etc.) is treated as failed.  This handles timed-out checks, unusual
-    markers, and future status types.
+    The raw summary contains HTML with emoji/image markers for each
+    sub-check (tick = pass, crossed = fail).  We parse the raw text
+    *before* stripping HTML so markers stay associated with their
+    component name.
 
-    Returns a compact string like:
-      ``DRP Checkers overall status: FAIL | Failed: mcafee antivirus, Ticket``
+    Returns a comma-separated list of failed check names, e.g.
+    ``"Ticket"`` or ``"Ticket, checkmarx"``.  Returns empty string
+    when all checks passed or the format cannot be parsed.
     """
     if not raw_summary:
         return ""
+
+    # Work on the HTML-stripped text.  The GitHub check output renders
+    # emoji as literal text or shortcodes after stripping.
     text = _strip_html(raw_summary)
+
+    # Normalise whitespace but keep newlines
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-    # Pass markers — only these mean "passed"
-    _pass_re = re.compile(
-        r"[\u2705\u2714\u2713\u2611]"          # ✅ ✔ ✓ ☑
-        r"|:white_check_mark:|:heavy_check_mark:|:check:"
-        r"|tick\b"
-    )
-
-    # Any emoji-like marker at the start of a line indicates a component line
-    # (covers tick, cross, timed_out, hourglass, warning, etc.)
-    _marker_re = re.compile(
+    # ---- Identify the component-list section ----
+    # Component lines look like:
+    #   "tick  Blackduck Signature Checker Service"
+    #   "crossed  Ticket"
+    #   "✅  checkmarx"
+    # We look for lines that START with a known marker word/emoji.
+    _component_re = re.compile(
         r"^(?:"
-        r"[\u2705\u2714\u2713\u2611"            # pass markers
-        r"\u274C\u274E\u2716\u2718\u26D4"       # fail markers
-        r"\u23F3\u231B\u26A0\u2757\u2753"       # ⏳ ⌛ ⚠ ❗ ❓
-        r"\U0001F552\U0001F6D1]"                # 🕒 🛑
-        r"|:[a-z_]+:"                           # GitHub emoji shortcodes
-        r"|tick\b|crossed\b|timed_out\w*"       # text-based markers
-        r")"
+        r"tick|crossed|timed_out\w*"                       # text markers
+        r"|[\u2705\u2714\u2713\u2611"                      # ✅ ✔ ✓ ☑
+        r"\u274C\u274E\u2716\u2718\u26D4"                  # ❌ ❎ ✖ ✘ ⛔
+        r"\u23F3\u231B\u26A0\u2757\u2753"                  # ⏳ ⌛ ⚠ ❗ ❓
+        r"\U0001F552\U0001F6D1]"                           # 🕒 🛑
+        r"|:[a-z_]+:"                                      # :shortcode:
+        r")\s+(.+)",
+        re.IGNORECASE,
     )
 
-    # Collect overall status lines (may be multiple; keep the first
-    # that contains a result keyword)
-    status_line = ""
-    for ln in lines:
-        if "overall status" in ln.lower():
-            # Prefer a status line that actually states the result
-            has_result = re.search(r"fail|success|pass|error", ln, re.IGNORECASE)
-            if has_result:
-                status_line = ln
-                break
-            elif not status_line:
-                status_line = ln
+    _pass_marker_re = re.compile(
+        r"^(?:tick|[\u2705\u2714\u2713\u2611]"
+        r"|:white_check_mark:|:heavy_check_mark:|:check:)",
+        re.IGNORECASE,
+    )
 
-    # Identify component lines and split into pass/fail
-    failed = []
+    failed: list[str] = []
     for ln in lines:
-        if not _marker_re.search(ln):
+        m = _component_re.match(ln)
+        if not m:
             continue
-        # Skip status/header lines
-        if "overall status" in ln.lower() or "drp checker" in ln.lower():
+        # Skip lines that are clearly headers/status, not component entries
+        component_name = m.group(1).strip()
+        if not component_name or "overall status" in ln.lower():
             continue
-        if _pass_re.search(ln):
-            continue  # This component passed
-        # Not a pass — extract component name by stripping the marker
-        name = _marker_re.sub("", ln).strip()
-        name = re.sub(r"^[\s\-|:]+", "", name).strip()
-        if name:
-            failed.append(name)
+        # If the marker is a pass marker, skip
+        if _pass_marker_re.match(ln):
+            continue
+        failed.append(component_name)
 
-    parts = []
-    if status_line:
-        parts.append(status_line)
-    if failed:
-        parts.append("Failed: " + ", ".join(failed))
-    return " | ".join(parts) if parts else text
+    return ", ".join(failed)
 
 
 def _extract_scan_summary(raw_summary: str) -> str:

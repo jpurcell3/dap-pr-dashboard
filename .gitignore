@@ -4,3 +4,5 @@ __pycache__/
 pr_cache.json
 server.log
 nul
+venv/
+*.zip

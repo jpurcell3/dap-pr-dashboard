@@ -60,7 +60,7 @@ ORG_NAME = os.environ.get("GITHUB_ORG", "fusion-e")
 REPO_FILTER = os.environ.get("GITHUB_REPO_FILTER", "").strip()
 SSL_VERIFY = os.environ.get("SSL_VERIFY", "false").lower() not in ("false", "0", "no")
 DEFAULT_CACHE_PATH = Path(__file__).parent / "pr_cache.json"
-DEFAULT_PR_LOOKBACK_DAYS = int(os.environ.get("DEFAULT_PR_LOOKBACK_DAYS", "90"))
+DEFAULT_PR_LOOKBACK_DAYS = int(os.environ.get("DEFAULT_PR_LOOKBACK_DAYS", "7"))
 MAX_PRS_PER_REPO = int(os.environ.get("MAX_PRS_PER_REPO", "500"))
 
 # Concurrency settings — control parallelism during refresh.

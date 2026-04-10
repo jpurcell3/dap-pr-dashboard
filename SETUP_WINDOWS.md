@@ -32,6 +32,6 @@ Edit `.env` to configure:
 - `GITHUB_ORG` - Your GitHub organization name
 - `GITHUB_API_URL` - API URL (change for GitHub Enterprise)
 - `GITHUB_REPO_FILTER` - Regex to filter repos by name (leave empty for all)
-- `DEFAULT_PR_LOOKBACK_DAYS` - How far back to fetch PRs (default: 90)
+- `DEFAULT_PR_LOOKBACK_DAYS` - How far back to fetch PRs (default: 7)
 
 See `.env.example` for all available options.

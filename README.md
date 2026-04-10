@@ -64,7 +64,7 @@ All configuration is via environment variables (or `.env` file):
 | `GITHUB_REPO_FILTER` | *(empty)* | Regex to filter repo names (empty = all repos in org) |
 | `SSL_VERIFY` | `true` | Set `false` for self-signed certs |
 | `GITHUB_WEB_URL` | *(auto-derived)* | Override the web URL for PR links |
-| `DEFAULT_PR_LOOKBACK_DAYS` | `90` | Default date window for refreshes |
+| `DEFAULT_PR_LOOKBACK_DAYS` | `7` | Default date window for refreshes |
 | `MAX_PRS_PER_REPO` | `500` | Safety cap on PRs fetched per repo |
 | `CACHE_PATH` | `pr_cache.json` (next to app.py) | Override the cache file location |
 | `LOG_TO_STDOUT` | *(unset)* | Set `true` to skip writing `server.log` |

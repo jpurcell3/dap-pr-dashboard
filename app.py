@@ -447,7 +447,7 @@ def api_refresh():
         fusion-* repos are refreshed.
     since : str, optional
         ISO date (``YYYY-MM-DD``).  Only fetch PRs created on or after this
-        date.  Defaults to ``DEFAULT_PR_LOOKBACK_DAYS`` days ago (90 by
+        date.  Defaults to ``DEFAULT_PR_LOOKBACK_DAYS`` days ago (7 by
         default).  Pass ``since=all`` to fetch all PRs with no date filter.
     until : str, optional
         ISO date (``YYYY-MM-DD``).  Exclude PRs created after this date

@@ -3612,7 +3612,7 @@
                                             ? formatDrpFailedChecks(c.output_summary)
                                             : isTicketCheck(c.name)
                                             ? formatTicketOutput(c.output_summary)
-                                            : `<span class="ms-1">${esc(filterFailureLines(c.output_summary))}</span>`) : ''}
+                                            : `<span class="ms-1">${esc(filterFailureLines(c.output_summary)).replace(/\n/g, '<br>')}</span>`) : ''}
                                     </div>` : ''}
                             `).join('')}
                             ${hiddenCount > 0 ? `

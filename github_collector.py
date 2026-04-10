@@ -934,10 +934,10 @@ def _extract_scan_summary(raw_summary: str) -> str:
     if scan_match or action_match:
         parts = []
         if scan_match:
-            parts.append(f"Scan Summary: {scan_match.group(1).strip()}")
+            parts.append(scan_match.group(1).strip())
         if action_match:
-            parts.append(f"Action: {action_match.group(1).strip()}")
-        return " | ".join(parts)
+            parts.append(action_match.group(1).strip())
+        return "\n".join(parts)
 
     # --- Pattern 2: Markdown heading  ## Summary  /  ### Summary ---
     md_match = re.search(

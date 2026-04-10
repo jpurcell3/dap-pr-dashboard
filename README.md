@@ -18,7 +18,7 @@ A Flask web app that aggregates pull request data from GitHub / GitHub Enterpris
 
 ```bash
 git clone <this-repo>
-cd fusion-pr-dashboard
+cd dap-pr-dashboard
 ```
 
 ### 2. Install dependencies
@@ -129,7 +129,7 @@ docker compose watch
 ## Project Structure
 
 ```
-fusion-pr-dashboard/
+dap-pr-dashboard/
   app.py                 # Flask server and API routes
   github_collector.py    # GitHub API client (PRs, reviews, commits, checks)
   metrics.py             # Cycle-time metrics and bottleneck detection

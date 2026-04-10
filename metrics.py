@@ -363,6 +363,41 @@ def detect_bottlenecks(metrics: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
+    # --- unstable_build: Jenkins build(s) returned UNSTABLE ---
+    checks_data = metrics.get("checks") or {}
+    unstable_checks = [
+        c for c in checks_data.get("checks", [])
+        if (c.get("jenkins_result") or "").upper() == "UNSTABLE"
+    ]
+    if len(unstable_checks) >= 2:
+        names = ", ".join(
+            c.get("name", "").replace("continuous-integration/jenkins/", "")
+            for c in unstable_checks
+        )
+        bottlenecks.append(
+            {
+                "type": "unstable_build",
+                "severity": "high",
+                "description": (
+                    f"{len(unstable_checks)} Jenkins builds are unstable"
+                    f" ({names})."
+                ),
+            }
+        )
+    elif len(unstable_checks) == 1:
+        name = unstable_checks[0].get("name", "").replace(
+            "continuous-integration/jenkins/", ""
+        )
+        bottlenecks.append(
+            {
+                "type": "unstable_build",
+                "severity": "medium",
+                "description": (
+                    f"Jenkins build is unstable ({name})."
+                ),
+            }
+        )
+
     return bottlenecks
 
 

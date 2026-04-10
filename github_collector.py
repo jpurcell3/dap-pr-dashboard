@@ -1101,6 +1101,51 @@ def _extract_scan_summary(raw_summary: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Jenkins result enrichment
+# ---------------------------------------------------------------------------
+
+_JENKINS_CHECK_PREFIX = "continuous-integration/jenkins/"
+
+
+def _enrich_jenkins_results(checks_summary: dict) -> None:
+    """Add ``jenkins_result`` to each Jenkins check in *checks_summary*.
+
+    For every check whose name starts with ``continuous-integration/jenkins/``
+    and that carries a ``details_url``, fire a lightweight Jenkins API call to
+    retrieve the real build result (SUCCESS / FAILURE / UNSTABLE / …).
+
+    The ``jenkins_result`` key is set directly on the check dict so downstream
+    metrics can distinguish UNSTABLE from FAILURE.  If Jenkins is not
+    configured or unreachable the key is simply omitted.
+    """
+    try:
+        from jenkins_client import fetch_build_info, is_configured as _jenkins_ok
+    except ImportError:
+        return
+    if not _jenkins_ok():
+        return
+
+    jenkins_checks = [
+        c for c in checks_summary.get("checks", [])
+        if c.get("name", "").startswith(_JENKINS_CHECK_PREFIX) and c.get("details_url")
+    ]
+    if not jenkins_checks:
+        return
+
+    def _fetch_result(check: dict) -> None:
+        try:
+            info = fetch_build_info(check["details_url"])
+            if info and info.get("result"):
+                check["jenkins_result"] = info["result"]
+        except Exception:
+            logger.debug("Jenkins result lookup failed for %s", check.get("details_url"))
+
+    # Fetch in parallel — typically only 1-2 Jenkins checks per PR.
+    with ThreadPoolExecutor(max_workers=min(len(jenkins_checks), 4)) as pool:
+        list(pool.map(_fetch_result, jenkins_checks))
+
+
+# ---------------------------------------------------------------------------
 # Aggregate fetch
 # ---------------------------------------------------------------------------
 
@@ -1176,6 +1221,11 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
     except Exception:
         logger.error("Error fetching checks for %s#%d", repo_name, pr_number, exc_info=True)
         pr["checks"] = empty_checks
+
+    # Enrich Jenkins checks with actual build result (SUCCESS/FAILURE/UNSTABLE).
+    # GitHub commit statuses don't distinguish UNSTABLE from FAILURE, so we
+    # make a lightweight Jenkins API call per Jenkins check to get the real result.
+    _enrich_jenkins_results(pr.get("checks", empty_checks))
 
     return pr
 

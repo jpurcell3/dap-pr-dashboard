@@ -2606,6 +2606,12 @@
     /** Switch between severity and checks views */
     function switchInsightMode(mode) {
         _insightViewMode = mode;
+        // Clear filters when switching between PR Checks / Bottlenecks tabs
+        _allPrsRepoFilter = '';
+        _allPrsCheckGroupFilter = '';
+        _allPrsCheckGroupLabel = '';
+        _allPrsCheckResultFilter = '';
+        _allPrsStateFilters.clear();
         const container = document.getElementById('allPrsContent');
         if (container) renderInsightView(container);
     }

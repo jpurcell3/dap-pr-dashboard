@@ -2081,11 +2081,11 @@
                                         <td>${r.total_prs || 0}</td>
                                         <td><span class="text-success">${r.open || r.open_prs || 0}</span></td>
                                         <td><span style="color: var(--accent-purple)">${r.merged || r.merged_prs || 0}</span></td>
-                                        <td>
+                                        <td data-order="${r.avg_cycle_time_hours || 0}">
                                             <span class="${cycleClass(r.avg_cycle_time_hours)}">${fmtDuration(r.avg_cycle_time_hours)}</span>
                                             <small class="text-muted ms-1">(${round(r.avg_cycle_time_hours) || '--'}h)</small>
                                         </td>
-                                        <td>
+                                        <td data-order="${r.median_cycle_time_hours || 0}">
                                             <span class="${cycleClass(r.median_cycle_time_hours)}">${fmtDuration(r.median_cycle_time_hours)}</span>
                                             <small class="text-muted ms-1">(${round(r.median_cycle_time_hours) || '--'}h)</small>
                                         </td>

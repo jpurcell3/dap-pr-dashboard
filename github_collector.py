@@ -564,6 +564,7 @@ def fetch_commit_checks(
     repo_name: str,
     sha: str,
     token: str | None = None,
+    pr_html_url: str | None = None,
 ) -> dict:
     """Fetch check-runs and combined status for a single commit.
 
@@ -634,13 +635,17 @@ def fetch_commit_checks(
                 # Drop the output title when it just repeats the check name
                 # (e.g. Twistlock sets title="twistlock") to avoid duplication.
                 output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
+                details_url = cr.get("details_url") or cr.get("html_url", "")
+                if _is_drp_checker(check_name) and pr_html_url:
+                    details_url = f"{pr_html_url}/checks"
+                
                 results.append({
                     "name": check_name,
                     "status": cr.get("status", ""),
                     "conclusion": conclusion,
                     "started_at": cr.get("started_at", ""),
                     "completed_at": cr.get("completed_at", ""),
-                    "details_url": cr.get("details_url") or cr.get("html_url", ""),
+                    "details_url": details_url,
                     "output_title": output_title,
                     "output_summary": summary_text,
                 })
@@ -673,11 +678,15 @@ def fetch_commit_checks(
                 if ctx in seen_contexts:
                     continue
                 seen_contexts.add(ctx)
+                details_url = s.get("target_url", "")
+                if _is_drp_checker(ctx) and pr_html_url:
+                    details_url = f"{pr_html_url}/checks"
+
                 results.append({
                     "name": ctx,
                     "status": "completed",
                     "conclusion": s.get("state", "pending"),
-                    "details_url": s.get("target_url", ""),
+                    "details_url": details_url,
                     "output_title": s.get("description", ""),
                     "output_summary": "",
                 })
@@ -1215,7 +1224,9 @@ def _enrich_single_pr(repo_name: str, pr: dict, token: str) -> dict:
     try:
         if pr["commits"]:
             head_sha = pr["commits"][-1]["sha"]
-            pr["checks"] = fetch_commit_checks(repo_name, head_sha, token=token)
+            pr["checks"] = fetch_commit_checks(
+                repo_name, head_sha, token=token, pr_html_url=pr.get("html_url")
+            )
         else:
             pr["checks"] = empty_checks
     except Exception:

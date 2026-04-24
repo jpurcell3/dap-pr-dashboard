@@ -636,10 +636,16 @@ def fetch_commit_checks(
                 # (e.g. Twistlock sets title="twistlock") to avoid duplication.
                 output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
                 details_url = cr.get("details_url") or cr.get("html_url", "")
-                if (_is_drp_checker(check_name) or _is_ticket_check(check_name)) and pr_html_url:
-                    old_url = details_url
-                    details_url = f"{pr_html_url}/checks"
-                    logger.info(f"URL OVERRIDE: {check_name} | {old_url} -> {details_url}")
+                # The DRP Checkers GitHub App sets details_url to a
+                # generic Confluence page for every check it creates.
+                # Override with a direct link to the specific check-run
+                # results on the PR's Checks tab.
+                if pr_html_url and _is_drp_app_url(details_url):
+                    check_run_id = cr.get("id")
+                    if check_run_id:
+                        details_url = f"{pr_html_url}/checks?check_run_id={check_run_id}"
+                    else:
+                        details_url = f"{pr_html_url}/checks"
                 
                 results.append({
                     "name": check_name,
@@ -681,7 +687,7 @@ def fetch_commit_checks(
                     continue
                 seen_contexts.add(ctx)
                 details_url = s.get("target_url", "")
-                if (_is_drp_checker(ctx) or _is_ticket_check(ctx)) and pr_html_url:
+                if pr_html_url and _is_drp_app_url(details_url):
                     details_url = f"{pr_html_url}/checks"
 
                 results.append({
@@ -984,6 +990,17 @@ def _extract_ticket_summary(raw_summary: str) -> str:
 
     # Fallback: plain text
     return _strip_html(raw_summary)
+
+
+# Confluence URL that the DRP Checkers GitHub App sets as details_url.
+_DRP_APP_CONFLUENCE_URL = "confluence.cec.lab.emc.com/display/TN/DRP+Checkers+App+User+Guide"
+# Also match the /spaces/ variant
+_DRP_APP_CONFLUENCE_URL_ALT = "confluence.cec.lab.emc.com/spaces/TN/pages/828191377/DRP+Checkers+App+User+Guide"
+
+
+def _is_drp_app_url(url: str) -> bool:
+    """Return True if *url* is the generic Confluence page set by the DRP Checkers app."""
+    return _DRP_APP_CONFLUENCE_URL in url or _DRP_APP_CONFLUENCE_URL_ALT in url
 
 
 def _is_drp_checker(check_name: str) -> bool:

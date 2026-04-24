@@ -637,7 +637,9 @@ def fetch_commit_checks(
                 output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
                 details_url = cr.get("details_url") or cr.get("html_url", "")
                 if (_is_drp_checker(check_name) or _is_ticket_check(check_name)) and pr_html_url:
+                    old_url = details_url
                     details_url = f"{pr_html_url}/checks"
+                    logger.info(f"URL OVERRIDE: {check_name} | {old_url} -> {details_url}")
                 
                 results.append({
                     "name": check_name,

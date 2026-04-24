@@ -636,7 +636,7 @@ def fetch_commit_checks(
                 # (e.g. Twistlock sets title="twistlock") to avoid duplication.
                 output_title = "" if raw_title.strip().lower() == check_name.strip().lower() else raw_title
                 details_url = cr.get("details_url") or cr.get("html_url", "")
-                if _is_drp_checker(check_name) and pr_html_url:
+                if (_is_drp_checker(check_name) or _is_ticket_check(check_name)) and pr_html_url:
                     details_url = f"{pr_html_url}/checks"
                 
                 results.append({
@@ -679,7 +679,7 @@ def fetch_commit_checks(
                     continue
                 seen_contexts.add(ctx)
                 details_url = s.get("target_url", "")
-                if _is_drp_checker(ctx) and pr_html_url:
+                if (_is_drp_checker(ctx) or _is_ticket_check(ctx)) and pr_html_url:
                     details_url = f"{pr_html_url}/checks"
 
                 results.append({

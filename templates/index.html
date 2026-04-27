@@ -4010,7 +4010,11 @@
 
                 <!-- Worst Phase by Repo -->
                 <div class="section-card">
-                    <h5><i class="bi bi-exclamation-diamond me-2"></i>Slowest Phase by Repository</h5>
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('worstPhasePanel', this)">
+                        <i class="bi bi-exclamation-diamond me-2"></i>Slowest Phase by Repository
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="worstPhasePanel">
                     <p class="text-muted mb-3" style="font-size: 0.85rem;">Which cycle-time phase is the biggest bottleneck for each repo — sorted by total cycle time.</p>
                     <div class="table-responsive">
                         <table id="tableWorstPhases" class="table table-dark-custom table-hover w-100">
@@ -4046,6 +4050,7 @@
                                 }).join('')}
                             </tbody>
                         </table>
+                    </div>
                     </div>
                 </div>
 

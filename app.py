@@ -27,6 +27,10 @@ from github_collector import (
 )
 from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
 from jenkins_client import fetch_build_details, is_configured as jenkins_is_configured
+from reminder import (
+    reminder_is_enabled, send_reminders, find_stale_reviews,
+    REMINDER_THRESHOLD_HOURS, REMINDER_INTERVAL_HOURS, REMINDER_DRY_RUN,
+)
 from redis_state import (
     data_store_get, data_store_set, data_store_update,
     data_store_loaded, data_store_snapshot,
@@ -473,6 +477,9 @@ def _do_refresh(repos=None, since=None, until=None):
         # Backfill Jenkins results for any checks the sync missed
         # (e.g. Jenkins was briefly unreachable during the sync).
         _backfill_jenkins_results()
+
+        # Send reviewer reminders for stale reviews (background thread).
+        _run_reminders()
 
     except RefreshCancelled:
         logger.info("Refresh cancelled by user.")
@@ -955,11 +962,66 @@ def api_health():
         "last_result": _auto_refresh_last_result,
     }
 
+    # --- Reviewer reminders ---
+    checks["reminders"] = {
+        "enabled": reminder_is_enabled(),
+        "threshold_hours": REMINDER_THRESHOLD_HOURS,
+        "interval_hours": REMINDER_INTERVAL_HOURS,
+        "dry_run": REMINDER_DRY_RUN,
+        "last_run": (
+            datetime.fromtimestamp(_reminder_last_run, tz=timezone.utc).isoformat()
+            if _reminder_last_run else None
+        ),
+        "last_result": _reminder_last_result,
+    }
+
     status_code = 200 if healthy else 503
     return jsonify({"status": "healthy" if healthy else "degraded", "checks": checks}), status_code
 
 
-# 9. Jenkins build details -----------------------------------------------------
+# 9. Reviewer reminders --------------------------------------------------------
+
+@app.route("/api/reminders")
+def api_reminders():
+    """Return stale review requests and reminder status.
+
+    Query params:
+        threshold – override default threshold hours (optional)
+        send      – "true" to actually send reminders now (POST-like via GET)
+    """
+    raw_prs = data_store_get("raw_prs", {})
+    if not raw_prs:
+        return jsonify({"error": "No data loaded — run a sync first."}), 404
+
+    threshold = request.args.get("threshold", type=float)
+    stale = find_stale_reviews(raw_prs, threshold_hours=threshold)
+
+    result: dict = {
+        "enabled": reminder_is_enabled(),
+        "threshold_hours": threshold or REMINDER_THRESHOLD_HOURS,
+        "interval_hours": REMINDER_INTERVAL_HOURS,
+        "dry_run": REMINDER_DRY_RUN,
+        "stale_count": len(stale),
+        "stale_reviews": stale,
+        "last_run": (
+            datetime.fromtimestamp(_reminder_last_run, tz=timezone.utc).isoformat()
+            if _reminder_last_run else None
+        ),
+        "last_result": _reminder_last_result,
+    }
+
+    # Allow triggering reminders on demand
+    if request.args.get("send", "").lower() in ("1", "true", "yes"):
+        if not reminder_is_enabled():
+            result["send_error"] = "Reminders are disabled (set REMINDER_ENABLED=true)"
+        else:
+            send_result = send_reminders(raw_prs)
+            result["send_result"] = send_result
+
+    return jsonify(result)
+
+
+# 10. Jenkins build details ----------------------------------------------------
 # In-memory cache: build_url → {data, fetched_at}
 _jenkins_cache: dict[str, dict] = {}
 _JENKINS_CACHE_TTL = 600  # seconds
@@ -1076,6 +1138,46 @@ def _backfill_jenkins_results():
 
 
 # ---------------------------------------------------------------------------
+# Reviewer reminders
+# ---------------------------------------------------------------------------
+_reminder_last_run: float | None = None
+_reminder_last_result: dict | None = None
+
+
+def _run_reminders():
+    """Post reviewer reminder comments for stale reviews.
+
+    Runs in a background thread so it never blocks sync or startup.
+    """
+    global _reminder_last_run, _reminder_last_result
+
+    if not reminder_is_enabled():
+        return
+    if not data_store_loaded():
+        return
+
+    raw_prs = data_store_get("raw_prs", {})
+    if not raw_prs:
+        return
+
+    logger.info("Reviewer reminders: starting scan...")
+
+    def _run():
+        global _reminder_last_run, _reminder_last_result
+        try:
+            result = send_reminders(raw_prs)
+            _reminder_last_run = time.time()
+            _reminder_last_result = result
+        except Exception:
+            logger.exception("Reviewer reminders failed")
+            _reminder_last_run = time.time()
+            _reminder_last_result = {"error": "exception — see server log"}
+
+    thread = threading.Thread(target=_run, daemon=True, name="reviewer-reminders")
+    thread.start()
+
+
+# ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------
 # Load cache into memory when the module is first imported / the app starts.
@@ -1083,6 +1185,9 @@ _load_cache_into_store()
 
 # Backfill any Jenkins checks missing jenkins_result (runs in background).
 _backfill_jenkins_results()
+
+# Run reviewer reminders if enabled (runs in background).
+_run_reminders()
 
 # Clear stale refresh state left over from a previous crash / restart.
 # If Redis says "running" but no thread is actually active, reset it.

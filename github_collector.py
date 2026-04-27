@@ -468,6 +468,27 @@ def fetch_pr_timeline(
         return []
 
 
+def post_pr_comment(
+    repo_name: str,
+    pr_number: int,
+    body: str,
+    token: str | None = None,
+) -> dict:
+    """Post a comment on a pull request (issue comment endpoint).
+
+    Returns the created comment dict from the GitHub API.
+    """
+    headers = _build_headers(token)
+    url = f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}/issues/{pr_number}/comments"
+    response = requests.post(
+        url, headers=headers, json={"body": body},
+        timeout=HTTP_TIMEOUT, verify=SSL_VERIFY,
+    )
+    _check_rate_limit(response)
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_pr_comments(
     repo_name: str,
     pr_number: int,
@@ -535,7 +556,7 @@ def fetch_pr_commits(
     """Fetch all commits for a pull request.
 
     Returns a list of commit dicts, each containing:
-    ``sha``, ``message``, ``author_name``, ``author_login``, ``date``.
+    ``sha``, ``message``, ``author_name``, ``author_email``, ``author_login``, ``date``.
     """
     headers = _build_headers(token)
     url = f"{GITHUB_API_BASE}/repos/{ORG_NAME}/{repo_name}/pulls/{pr_number}/commits"
@@ -554,6 +575,7 @@ def fetch_pr_commits(
             "sha": c.get("sha", ""),
             "message": (c.get("commit", {}).get("message") or "").split("\n", 1)[0],
             "author_name": c.get("commit", {}).get("author", {}).get("name", ""),
+            "author_email": c.get("commit", {}).get("author", {}).get("email", ""),
             "author_login": (c.get("author") or {}).get("login", ""),
             "date": c.get("commit", {}).get("author", {}).get("date", ""),
         })

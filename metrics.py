@@ -185,6 +185,10 @@ def compute_pr_metrics(pr_data: dict[str, Any]) -> dict[str, Any]:
             "total": 0, "success": 0, "failure": 0,
             "pending": 0, "overall_state": "unknown", "checks": [],
         },
+        # Requested reviewers (passthrough for reminder system)
+        "requested_reviewers": [
+            r.get("login", "") for r in (pr_data.get("requested_reviewers") or [])
+        ],
     }
 
     # Detect and attach bottlenecks

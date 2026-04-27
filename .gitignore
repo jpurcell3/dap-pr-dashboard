@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 pr_cache.json
+reminder_ledger.json
 server.log
 nul
 venv/

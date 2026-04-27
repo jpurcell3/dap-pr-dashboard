@@ -3844,6 +3844,10 @@
             const pr = await apiFetch(`/api/pr/${encodeURIComponent(repoName)}/${prNumber}`);
             const bottlenecks = pr.bottlenecks || pr.bottleneck_flags || [];
             const reviewers = pr.reviewers || pr.reviews || [];
+            const requestedReviewers = pr.requested_reviewers || [];
+            // Determine who is still waiting (requested but not yet reviewed)
+            const reviewedLogins = new Set(reviewers.map(r => (r.user || r.login || r.reviewer || '').toLowerCase()));
+            const waitingReviewers = requestedReviewers.filter(login => login && !reviewedLogins.has(login.toLowerCase()));
             const ghUrl = `${state.githubWebUrl}/${encodeURIComponent(state.githubOrg)}/${encodeURIComponent(repoName)}/pull/${prNumber}`;
 
             // Build timeline events
@@ -3882,6 +3886,9 @@
                                     <h4 class="mb-1" style="color: #f0f6fc;">${esc(pr.title)}</h4>
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
                                         ${stateBadge(pr.state)}
+                                        ${pr.state === 'open' && waitingReviewers.length > 0
+                                            ? `<span class="badge" style="background-color: var(--accent-yellow); color: #000;"><i class="bi bi-hourglass-split me-1"></i>Waiting for Review (${waitingReviewers.length})</span>`
+                                            : ''}
                                         <span class="text-muted">
                                             <i class="bi bi-person me-1"></i>${esc(pr.author || pr.user || '')}
                                         </span>
@@ -4081,6 +4088,12 @@
                         <!-- Reviewers -->
                         <div class="section-card">
                             <h5><i class="bi bi-people me-2"></i>Reviewers</h5>
+                            ${waitingReviewers.length > 0 ? `
+                            <div style="background: rgba(210, 153, 34, 0.1); border-left: 3px solid var(--accent-yellow); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem;">
+                                <i class="bi bi-hourglass-split me-1" style="color: var(--accent-yellow);"></i>
+                                <strong>${waitingReviewers.length}</strong> reviewer${waitingReviewers.length !== 1 ? 's' : ''} pending:
+                                ${waitingReviewers.map(login => `<span style="color: var(--accent-yellow);">@${esc(login)}</span>`).join(', ')}
+                            </div>` : ''}
                             ${reviewers.length > 0 ? reviewers.map(r => {
                                 const name = r.user || r.login || r.reviewer || 'Unknown';
                                 const reviewState = r.state || '';

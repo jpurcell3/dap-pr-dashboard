@@ -25,7 +25,10 @@ from github_collector import (
     GITHUB_API_BASE, ORG_NAME, REPO_FILTER,
     DEFAULT_PR_LOOKBACK_DAYS, MAX_PRS_PER_REPO,
 )
-from metrics import compute_all_metrics, compute_pr_metrics, detect_bottlenecks
+from metrics import (
+    compute_all_metrics, compute_pr_metrics, detect_bottlenecks,
+    compute_repo_trends, compute_org_trends,
+)
 from jenkins_client import fetch_build_details, is_configured as jenkins_is_configured
 from reminder import (
     reminder_is_enabled, send_reminders, find_stale_reviews,
@@ -877,7 +880,61 @@ def api_bottlenecks():
     return jsonify(bottlenecks)
 
 
-# 8. Health check --------------------------------------------------------------
+# 8. Trend analysis ------------------------------------------------------------
+
+@app.route("/api/trends")
+def api_trends():
+    """Return org-wide and per-repo cycle-time trends over time.
+
+    Query params:
+        bucket  – "week" (default) or "month"
+        repo    – comma-separated repo names to include (default: all)
+    """
+    if not data_store_loaded():
+        return jsonify({"error": "No data available. Run /api/refresh first."}), 400
+
+    bucket = request.args.get("bucket", "week")
+    if bucket not in ("week", "month"):
+        bucket = "week"
+
+    all_pr_metrics = dict(data_store_get("pr_metrics", {}))
+    if not all_pr_metrics:
+        return jsonify({"error": "No PR metrics — run a sync first."}), 404
+
+    # Optional repo filter
+    repo_arg = request.args.get("repo", "").strip()
+    if repo_arg:
+        wanted = {r.strip() for r in repo_arg.split(",")}
+        all_pr_metrics = {k: v for k, v in all_pr_metrics.items() if k in wanted}
+
+    result = compute_org_trends(all_pr_metrics, bucket=bucket)
+    return jsonify(result)
+
+
+@app.route("/api/repo/<repo_name>/trends")
+def api_repo_trends(repo_name: str):
+    """Return cycle-time trends for a single repository.
+
+    Query params:
+        bucket – "week" (default) or "month"
+    """
+    if not data_store_loaded():
+        return jsonify({"error": "No data available. Run /api/refresh first."}), 400
+
+    bucket = request.args.get("bucket", "week")
+    if bucket not in ("week", "month"):
+        bucket = "week"
+
+    all_pr_metrics = data_store_get("pr_metrics", {})
+    pr_list = all_pr_metrics.get(repo_name)
+    if pr_list is None:
+        return jsonify({"error": f"Repository '{repo_name}' not found."}), 404
+
+    trends = compute_repo_trends(pr_list, bucket=bucket)
+    return jsonify({"repo": repo_name, "bucket": bucket, "trends": trends})
+
+
+# 9. Health check --------------------------------------------------------------
 @app.route("/api/health")
 def api_health():
     """Return service health for monitoring and container orchestration.
@@ -979,7 +1036,7 @@ def api_health():
     return jsonify({"status": "healthy" if healthy else "degraded", "checks": checks}), status_code
 
 
-# 9. Reviewer reminders --------------------------------------------------------
+# 10. Reviewer reminders -------------------------------------------------------
 
 @app.route("/api/reminders")
 def api_reminders():
@@ -1021,7 +1078,7 @@ def api_reminders():
     return jsonify(result)
 
 
-# 10. Jenkins build details ----------------------------------------------------
+# 11. Jenkins build details ----------------------------------------------------
 # In-memory cache: build_url → {data, fetched_at}
 _jenkins_cache: dict[str, dict] = {}
 _JENKINS_CACHE_TTL = 600  # seconds

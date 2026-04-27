@@ -859,6 +859,11 @@
                             <i class="bi bi-code-square me-1"></i>PR Insights
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#trends" id="navTrends">
+                            <i class="bi bi-graph-up me-1"></i>Trends
+                        </a>
+                    </li>
                 </ul>
                 <div class="d-flex align-items-center gap-3">
                     <select class="form-select form-select-sm" id="navTeamSelect" onchange="selectTeam(this.value)"
@@ -991,6 +996,16 @@
                 <div class="section-loading">
                     <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
                     <p class="mt-2">Loading pull requests...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trends View -->
+        <div class="view" id="viewTrends">
+            <div id="trendsContent">
+                <div class="section-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <p class="mt-2">Loading trend data...</p>
                 </div>
             </div>
         </div>
@@ -1690,6 +1705,11 @@
                 showView('viewAllPrs');
                 document.getElementById('navAllPrs').classList.add('active');
                 loadAllPrsView();
+                break;
+            case 'trends':
+                showView('viewTrends');
+                document.getElementById('navTrends').classList.add('active');
+                loadTrendsView();
                 break;
             default:
                 showView('viewOverview');
@@ -3542,6 +3562,19 @@
                     </div>
                 </div>
 
+                <!-- Cycle Time Trend Chart -->
+                <div class="section-card">
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('repoTrendPanel', this)">
+                        <i class="bi bi-graph-up me-2"></i>Cycle Time Trend
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="repoTrendPanel">
+                        <div class="chart-container" style="height: 300px;">
+                            <canvas id="chartRepoTrend"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- PRs Table -->
                 <div class="section-card">
                     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -3809,6 +3842,99 @@
                     </div>`;
             }
 
+            // Chart: Cycle Time Trend (async-loaded from /api/repo/<name>/trends)
+            (async () => {
+                try {
+                    const trendData = await apiFetch(`/api/repo/${encodeURIComponent(repoName)}/trends`);
+                    const trends = trendData.trends || [];
+                    if (trends.length < 2) {
+                        document.getElementById('chartRepoTrend').parentElement.innerHTML =
+                            '<p class="text-muted text-center py-4">Not enough data points for trend analysis (need 2+ weeks of merged PRs).</p>';
+                        return;
+                    }
+                    const labels = trends.map(t => t.period);
+                    const dfltT = chartDefaults();
+                    destroyChart('chartRepoTrend');
+                    const ctxTrend = document.getElementById('chartRepoTrend').getContext('2d');
+                    state.charts['chartRepoTrend'] = new Chart(ctxTrend, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: 'Time to First Review',
+                                    data: trends.map(t => t.avg_time_to_first_review_hours || 0),
+                                    borderColor: 'rgba(88, 166, 255, 0.9)',
+                                    backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                                    fill: true,
+                                    tension: 0.3,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 6,
+                                },
+                                {
+                                    label: 'Review to Approval',
+                                    data: trends.map(t => t.avg_first_review_to_approval_hours || 0),
+                                    borderColor: 'rgba(63, 185, 168, 0.9)',
+                                    backgroundColor: 'rgba(63, 185, 168, 0.1)',
+                                    fill: true,
+                                    tension: 0.3,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 6,
+                                },
+                                {
+                                    label: 'Approval to Merge',
+                                    data: trends.map(t => t.avg_approval_to_merge_hours || 0),
+                                    borderColor: 'rgba(188, 140, 255, 0.9)',
+                                    backgroundColor: 'rgba(188, 140, 255, 0.1)',
+                                    fill: true,
+                                    tension: 0.3,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 6,
+                                },
+                                {
+                                    label: 'Total Cycle Time',
+                                    data: trends.map(t => t.avg_total_cycle_time_hours || 0),
+                                    borderColor: 'rgba(248, 81, 73, 0.9)',
+                                    backgroundColor: 'transparent',
+                                    borderDash: [6, 3],
+                                    fill: false,
+                                    tension: 0.3,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 7,
+                                    borderWidth: 2,
+                                },
+                            ],
+                        },
+                        options: {
+                            ...dfltT,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                ...dfltT.plugins,
+                                legend: { ...dfltT.plugins.legend, position: 'bottom' },
+                                tooltip: {
+                                    ...dfltT.plugins.tooltip,
+                                    callbacks: {
+                                        afterTitle: items => {
+                                            const idx = items[0].dataIndex;
+                                            return `${trends[idx].pr_count} PRs merged`;
+                                        },
+                                        label: ctx => `${ctx.dataset.label}: ${fmtDuration(ctx.parsed.y)} (${round(ctx.parsed.y)}h)`,
+                                    },
+                                },
+                            },
+                            scales: {
+                                x: { ...dfltT.scales.x, title: { display: true, text: 'Week', color: '#8b949e' } },
+                                y: { ...dfltT.scales.y, title: { display: true, text: 'Hours', color: '#8b949e' }, beginAtZero: true },
+                            },
+                        },
+                    });
+                } catch (e) {
+                    console.warn('Trend chart load failed:', e);
+                    const el = document.getElementById('chartRepoTrend');
+                    if (el) el.parentElement.innerHTML = '<p class="text-muted text-center py-4">Could not load trend data.</p>';
+                }
+            })();
+
         } catch (err) {
             console.error('Failed to load repo detail:', err);
             container.innerHTML = `
@@ -3821,6 +3947,270 @@
                     <h5 class="mt-3">Failed to load repository data</h5>
                     <p class="text-muted">${esc(err.message)}</p>
                     <button class="btn btn-outline-info btn-sm mt-2" onclick="loadRepoDetail('${esc(repoName)}')">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                </div>`;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Trends Page (cross-repo comparison)
+    // ---------------------------------------------------------------------------
+    async function loadTrendsView() {
+        const container = document.getElementById('trendsContent');
+        container.innerHTML = `
+            <div class="section-loading">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <p class="mt-2">Loading trend data...</p>
+            </div>`;
+
+        try {
+            const data = await apiFetch('/api/trends');
+            const orgWide = data.org_wide || [];
+            const perRepo = data.per_repo || {};
+            const worstPhases = data.worst_phases || [];
+
+            const phaseLabels = {
+                time_to_first_review_hours: 'Time to First Review',
+                first_review_to_approval_hours: 'Review to Approval',
+                approval_to_merge_hours: 'Approval to Merge',
+                unattributed_hours: 'Unattributed / Rework',
+            };
+            const phaseColors = {
+                time_to_first_review_hours: '#58a6ff',
+                first_review_to_approval_hours: '#3fb9a8',
+                approval_to_merge_hours: '#bc8cff',
+                unattributed_hours: '#f0883e',
+            };
+
+            if (orgWide.length < 2 && worstPhases.length === 0) {
+                container.innerHTML = `
+                    <div class="section-card text-center py-5">
+                        <i class="bi bi-graph-up text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3" style="color: #f0f6fc;">Not Enough Trend Data</h5>
+                        <p class="text-muted">Need at least 2 weeks of merged PRs to generate trends.<br>
+                        Try syncing with a longer lookback window.</p>
+                    </div>`;
+                return;
+            }
+
+            let html = `
+                <!-- Org-Wide Trend -->
+                <div class="section-card">
+                    <h5><i class="bi bi-graph-up me-2"></i>Org-Wide Cycle Time Trend</h5>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="chartOrgTrend"></canvas>
+                    </div>
+                </div>
+
+                <!-- Worst Phase by Repo -->
+                <div class="section-card">
+                    <h5><i class="bi bi-exclamation-diamond me-2"></i>Slowest Phase by Repository</h5>
+                    <p class="text-muted mb-3" style="font-size: 0.85rem;">Which cycle-time phase is the biggest bottleneck for each repo — sorted by total cycle time.</p>
+                    <div class="table-responsive">
+                        <table id="tableWorstPhases" class="table table-dark-custom table-hover w-100">
+                            <thead>
+                                <tr>
+                                    <th>Repository</th>
+                                    <th>Merged PRs</th>
+                                    <th>Avg Cycle Time</th>
+                                    <th>Slowest Phase</th>
+                                    <th>Phase Avg</th>
+                                    <th>Time to Review</th>
+                                    <th>Review to Approval</th>
+                                    <th>Approval to Merge</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${worstPhases.map(w => {
+                                    const pa = w.phase_averages || {};
+                                    return `<tr onclick="navigate('#repo/${encodeURIComponent(w.repo)}')">
+                                        <td><span class="repo-name-link"><i class="bi bi-folder2 me-1"></i>${esc(w.repo)}</span></td>
+                                        <td>${w.merged_count}</td>
+                                        <td data-order="${w.avg_cycle_time_hours}">
+                                            <span class="${cycleClass(w.avg_cycle_time_hours)}">${fmtDuration(w.avg_cycle_time_hours)}</span>
+                                        </td>
+                                        <td><span class="badge" style="background-color: ${phaseColors[w.worst_phase] || '#8b949e'}; color: #fff;">${phaseLabels[w.worst_phase] || w.worst_phase}</span></td>
+                                        <td data-order="${w.worst_phase_avg_hours}">
+                                            <span class="${cycleClass(w.worst_phase_avg_hours)}">${fmtDuration(w.worst_phase_avg_hours)}</span>
+                                        </td>
+                                        <td data-order="${pa.time_to_first_review_hours || 0}">${fmtDuration(pa.time_to_first_review_hours)}</td>
+                                        <td data-order="${pa.first_review_to_approval_hours || 0}">${fmtDuration(pa.first_review_to_approval_hours)}</td>
+                                        <td data-order="${pa.approval_to_merge_hours || 0}">${fmtDuration(pa.approval_to_merge_hours)}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Per-Repo Trend Comparison -->
+                <div class="section-card">
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('perRepoTrendPanel', this)">
+                        <i class="bi bi-bar-chart-line me-2"></i>Per-Repo Cycle Time Comparison
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="perRepoTrendPanel">
+                        <div class="chart-container" style="height: 350px;">
+                            <canvas id="chartPerRepoTrend"></canvas>
+                        </div>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+
+            // Render Org-Wide Trend line chart
+            if (orgWide.length >= 2) {
+                const labels = orgWide.map(t => t.period);
+                const dflt = chartDefaults();
+                destroyChart('chartOrgTrend');
+                const ctx = document.getElementById('chartOrgTrend').getContext('2d');
+                state.charts['chartOrgTrend'] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Time to First Review',
+                                data: orgWide.map(t => t.avg_time_to_first_review_hours || 0),
+                                borderColor: '#58a6ff',
+                                backgroundColor: 'rgba(88, 166, 255, 0.08)',
+                                fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
+                            },
+                            {
+                                label: 'Review to Approval',
+                                data: orgWide.map(t => t.avg_first_review_to_approval_hours || 0),
+                                borderColor: '#3fb9a8',
+                                backgroundColor: 'rgba(63, 185, 168, 0.08)',
+                                fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
+                            },
+                            {
+                                label: 'Approval to Merge',
+                                data: orgWide.map(t => t.avg_approval_to_merge_hours || 0),
+                                borderColor: '#bc8cff',
+                                backgroundColor: 'rgba(188, 140, 255, 0.08)',
+                                fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
+                            },
+                            {
+                                label: 'Total Cycle Time',
+                                data: orgWide.map(t => t.avg_total_cycle_time_hours || 0),
+                                borderColor: '#f85149',
+                                backgroundColor: 'transparent',
+                                borderDash: [6, 3], fill: false, tension: 0.3,
+                                pointRadius: 4, pointHoverRadius: 7, borderWidth: 2,
+                            },
+                        ],
+                    },
+                    options: {
+                        ...dflt,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            ...dflt.plugins,
+                            legend: { ...dflt.plugins.legend, position: 'bottom' },
+                            tooltip: {
+                                ...dflt.plugins.tooltip,
+                                callbacks: {
+                                    afterTitle: items => {
+                                        const idx = items[0].dataIndex;
+                                        return `${orgWide[idx].pr_count} PRs merged`;
+                                    },
+                                    label: ctx => `${ctx.dataset.label}: ${fmtDuration(ctx.parsed.y)} (${round(ctx.parsed.y)}h)`,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { ...dflt.scales.x, title: { display: true, text: 'Week', color: '#8b949e' } },
+                            y: { ...dflt.scales.y, title: { display: true, text: 'Hours (avg)', color: '#8b949e' }, beginAtZero: true },
+                        },
+                    },
+                });
+            } else {
+                document.getElementById('chartOrgTrend').parentElement.innerHTML =
+                    '<p class="text-muted text-center py-4">Not enough data for org-wide trend (need 2+ weeks).</p>';
+            }
+
+            // Per-Repo cycle time comparison line chart (top repos by avg cycle time)
+            const repoNames = Object.keys(perRepo).filter(r => perRepo[r].length >= 2);
+            if (repoNames.length > 0) {
+                // Collect all unique periods across repos
+                const allPeriods = new Set();
+                repoNames.forEach(r => perRepo[r].forEach(t => allPeriods.add(t.period)));
+                const sortedPeriods = [...allPeriods].sort();
+
+                // Pick top 8 repos by latest average cycle time
+                const repoAvgs = repoNames.map(r => {
+                    const last = perRepo[r][perRepo[r].length - 1];
+                    return { repo: r, avg: last.avg_total_cycle_time_hours || 0 };
+                }).sort((a, b) => b.avg - a.avg).slice(0, 8);
+
+                const lineColors = ['#58a6ff','#3fb9a8','#bc8cff','#f0883e','#f85149','#3fb950','#d29922','#a5d6ff'];
+                const dflt = chartDefaults();
+                destroyChart('chartPerRepoTrend');
+                const ctx = document.getElementById('chartPerRepoTrend').getContext('2d');
+                state.charts['chartPerRepoTrend'] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: sortedPeriods,
+                        datasets: repoAvgs.map((ra, i) => {
+                            const trendMap = {};
+                            perRepo[ra.repo].forEach(t => { trendMap[t.period] = t.avg_total_cycle_time_hours || 0; });
+                            return {
+                                label: ra.repo,
+                                data: sortedPeriods.map(p => trendMap[p] ?? null),
+                                borderColor: lineColors[i % lineColors.length],
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                                spanGaps: true,
+                            };
+                        }),
+                    },
+                    options: {
+                        ...dflt,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            ...dflt.plugins,
+                            legend: { ...dflt.plugins.legend, position: 'bottom' },
+                            tooltip: {
+                                ...dflt.plugins.tooltip,
+                                callbacks: {
+                                    label: ctx => ctx.parsed.y != null
+                                        ? `${ctx.dataset.label}: ${fmtDuration(ctx.parsed.y)} (${round(ctx.parsed.y)}h)`
+                                        : `${ctx.dataset.label}: —`,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { ...dflt.scales.x, title: { display: true, text: 'Week', color: '#8b949e' } },
+                            y: { ...dflt.scales.y, title: { display: true, text: 'Avg Cycle Time (hours)', color: '#8b949e' }, beginAtZero: true },
+                        },
+                    },
+                });
+            } else {
+                document.getElementById('chartPerRepoTrend').parentElement.innerHTML =
+                    '<p class="text-muted text-center py-4">Not enough per-repo data for comparison.</p>';
+            }
+
+            // DataTable for worst phases
+            if (worstPhases.length > 0 && $.fn.DataTable) {
+                $('#tableWorstPhases').DataTable({
+                    paging: false,
+                    searching: false,
+                    info: false,
+                    order: [[2, 'desc']],
+                    columnDefs: [{ targets: '_all', className: 'align-middle' }],
+                });
+            }
+
+        } catch (err) {
+            console.error('Failed to load trends:', err);
+            container.innerHTML = `
+                <div class="section-card text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Failed to load trend data</h5>
+                    <p class="text-muted">${esc(err.message)}</p>
+                    <button class="btn btn-outline-info btn-sm mt-2" onclick="loadTrendsView()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Retry
                     </button>
                 </div>`;

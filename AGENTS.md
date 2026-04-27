@@ -14,7 +14,7 @@ python app.py
 ## Key Files
 - `app.py` — Flask server, API routes, Jenkins backfill, reminder wiring, refresh logic
 - `github_collector.py` — GitHub API client, PR enrichment, Jenkins result enrichment during sync
-- `metrics.py` — Cycle-time metrics, bottleneck detection (7 types including `unstable_build`)
+- `metrics.py` — Cycle-time metrics, bottleneck detection (7 types), trend analysis
 - `jenkins_client.py` — Jenkins API client (build info, stages, test reports)
 - `reminder.py` — Reviewer reminder system (stale review detection, GitHub comment posting)
 - `redis_state.py` — Redis-backed shared state with in-memory fallback
@@ -26,6 +26,7 @@ python app.py
 - No formal test suite; use inline Python scripts for verification
 - Syntax check: `python -c "import ast; ast.parse(open('file.py', encoding='utf-8').read())"`
 - Bottleneck detection can be unit-tested via `from metrics import detect_bottlenecks`
+- Trend analysis can be tested via `from metrics import compute_repo_trends, compute_org_trends`
 
 ## Architecture Notes
 - Jenkins `UNSTABLE` detection requires `JENKINS_USER` and `JENKINS_API_TOKEN` in `.env`
@@ -42,6 +43,14 @@ python app.py
 - `reminder_ledger.json` tracks sent reminders to avoid duplicates (gitignored)
 - API endpoint: `/api/reminders` — shows stale reviews, supports `?send=true` to trigger on demand
 - PR detail view shows a yellow "Waiting for Review" badge and pending reviewer list
+
+## Trend Analysis
+- `compute_repo_trends()` groups merged PRs by week/month and computes per-period cycle-time averages
+- `compute_org_trends()` aggregates trends cross-repo and ranks repos by worst phase
+- API endpoints: `/api/trends` (org-wide), `/api/repo/<name>/trends` (per-repo)
+- Supports `?bucket=week` (default) or `?bucket=month` query param
+- UI: "Trends" nav tab with org-wide line chart, worst-phase-by-repo table, per-repo comparison chart
+- Repo detail page includes a "Cycle Time Trend" line chart showing phase breakdown over time
 
 ## Distributions
 - **Docker**: `dap-pr-dashboard:latest` — Linux container with gunicorn

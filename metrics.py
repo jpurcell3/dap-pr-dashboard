@@ -5,7 +5,8 @@ Analyzes PR data from the GitHub API and computes cycle-time metrics
 and bottleneck flags.
 """
 
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 import statistics
 from typing import Any
 
@@ -494,6 +495,194 @@ def compute_repo_summary(
         "bottleneck_count": prs_with_bottlenecks,
         "top_bottleneck_types": bottleneck_type_counts,
         "longest_prs": longest_prs,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Trend analysis
+# ---------------------------------------------------------------------------
+
+_PHASE_KEYS = [
+    "total_cycle_time_hours",
+    "time_to_first_review_hours",
+    "first_review_to_approval_hours",
+    "approval_to_merge_hours",
+    "unattributed_hours",
+]
+
+_BOTTLENECK_TYPES = [
+    "slow_first_review",
+    "slow_approval",
+    "slow_merge",
+    "excessive_review_rounds",
+    "stale_pr",
+    "large_pr",
+    "unstable_build",
+]
+
+
+def _week_key(dt: datetime) -> str:
+    """Return the ISO Monday-based week label ``YYYY-Www``."""
+    iso = dt.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _week_start(label: str) -> str:
+    """Convert ``YYYY-Www`` to the Monday date string ``YYYY-MM-DD``."""
+    year, week = label.split("-W")
+    d = datetime.strptime(f"{year}-W{week}-1", "%Y-W%W-%w")
+    return d.strftime("%Y-%m-%d")
+
+
+def compute_repo_trends(
+    pr_metrics_list: list[dict[str, Any]],
+    bucket: str = "week",
+) -> list[dict[str, Any]]:
+    """Compute cycle-time trends over time for a single repo.
+
+    Groups **merged** PRs by the week (or month) they were merged and
+    computes averages, medians, PR counts, and bottleneck breakdowns
+    per period.
+
+    Parameters
+    ----------
+    pr_metrics_list:
+        List of per-PR metrics dicts (output of ``compute_pr_metrics``).
+    bucket:
+        ``"week"`` (default) or ``"month"``.
+
+    Returns
+    -------
+    list[dict]
+        One entry per period, sorted chronologically, e.g.::
+
+            {
+                "period": "2025-W14",
+                "period_start": "2025-03-31",
+                "pr_count": 5,
+                "avg_cycle_time_hours": 42.3,
+                "median_cycle_time_hours": 36.0,
+                "avg_time_to_first_review_hours": 12.1,
+                ...
+                "bottleneck_counts": {"slow_first_review": 2, ...},
+                "bottleneck_rate": 0.40,
+            }
+    """
+    # Collect merged PRs grouped by period
+    buckets: dict[str, list[dict]] = defaultdict(list)
+
+    for pm in pr_metrics_list:
+        if not pm.get("is_merged"):
+            continue
+        merged_at = _parse_datetime(pm.get("merged_at"))
+        if merged_at is None:
+            continue
+
+        if bucket == "month":
+            key = merged_at.strftime("%Y-%m")
+        else:
+            key = _week_key(merged_at)
+
+        buckets[key] = buckets.get(key, [])
+        buckets[key].append(pm)
+
+    if not buckets:
+        return []
+
+    result: list[dict[str, Any]] = []
+    for period in sorted(buckets.keys()):
+        prs = buckets[period]
+        entry: dict[str, Any] = {
+            "period": period,
+            "pr_count": len(prs),
+        }
+
+        # Period start date
+        if bucket == "month":
+            entry["period_start"] = f"{period}-01"
+        else:
+            entry["period_start"] = _week_start(period)
+
+        # Phase averages & medians
+        for key in _PHASE_KEYS:
+            vals = [pm[key] for pm in prs if pm.get(key) is not None]
+            entry[f"avg_{key}"] = round(_safe_avg(vals), 2)
+            entry[f"median_{key}"] = round(_safe_median(vals), 2)
+
+        # Bottleneck counts per type and overall rate
+        bn_counts: dict[str, int] = {}
+        prs_with_bn = 0
+        for pm in prs:
+            bns = pm.get("bottlenecks", [])
+            if bns:
+                prs_with_bn += 1
+            for b in bns:
+                btype = b.get("type", "unknown")
+                bn_counts[btype] = bn_counts.get(btype, 0) + 1
+        entry["bottleneck_counts"] = bn_counts
+        entry["bottleneck_rate"] = round(prs_with_bn / len(prs), 2) if prs else 0
+
+        result.append(entry)
+
+    return result
+
+
+def compute_org_trends(
+    all_pr_metrics: dict[str, list[dict[str, Any]]],
+    bucket: str = "week",
+) -> dict[str, Any]:
+    """Compute cross-repo trend comparison.
+
+    Returns
+    -------
+    dict
+        ``per_repo``: dict mapping repo name to its trend list.
+        ``org_wide``: aggregated trend across all repos.
+        ``worst_phases``: repos ranked by their worst cycle-time phase.
+    """
+    per_repo: dict[str, list[dict]] = {}
+    # Also accumulate a flat list for the org-wide aggregate
+    all_merged: list[dict] = []
+
+    for repo_name, prs in all_pr_metrics.items():
+        repo_trend = compute_repo_trends(prs, bucket=bucket)
+        if repo_trend:
+            per_repo[repo_name] = repo_trend
+        all_merged.extend(prs)
+
+    org_trend = compute_repo_trends(all_merged, bucket=bucket)
+
+    # Rank repos by their dominant bottleneck phase
+    worst_phases: list[dict[str, Any]] = []
+    for repo_name, prs in all_pr_metrics.items():
+        merged = [p for p in prs if p.get("is_merged")]
+        if not merged:
+            continue
+        avgs = {}
+        for key in _PHASE_KEYS[1:]:  # skip total_cycle_time
+            vals = [p[key] for p in merged if p.get(key) is not None]
+            avgs[key] = _safe_avg(vals)
+        if not avgs:
+            continue
+        worst_key = max(avgs, key=avgs.get)  # type: ignore[arg-type]
+        worst_phases.append({
+            "repo": repo_name,
+            "worst_phase": worst_key,
+            "worst_phase_avg_hours": round(avgs[worst_key], 2),
+            "avg_cycle_time_hours": round(
+                _safe_avg([p["total_cycle_time_hours"] for p in merged
+                           if p.get("total_cycle_time_hours") is not None]), 2
+            ),
+            "merged_count": len(merged),
+            "phase_averages": {k: round(v, 2) for k, v in avgs.items()},
+        })
+
+    worst_phases.sort(key=lambda x: x["avg_cycle_time_hours"], reverse=True)
+
+    return {
+        "per_repo": per_repo,
+        "org_wide": org_trend,
+        "worst_phases": worst_phases,
     }
 
 

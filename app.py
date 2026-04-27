@@ -6,7 +6,7 @@ bottleneck detection, and repository summaries sourced from
 GitHub / GitHub Enterprise.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import json
 import logging

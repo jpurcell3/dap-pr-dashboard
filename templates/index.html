@@ -3997,9 +3997,14 @@
             let html = `
                 <!-- Org-Wide Trend -->
                 <div class="section-card">
-                    <h5><i class="bi bi-graph-up me-2"></i>Org-Wide Cycle Time Trend</h5>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="chartOrgTrend"></canvas>
+                    <h5 style="cursor:pointer;" onclick="toggleChartPanel('orgTrendPanel', this)">
+                        <i class="bi bi-graph-up me-2"></i>Org-Wide Cycle Time Trend
+                        <i class="bi bi-chevron-up ms-2 toggle-icon" style="font-size:0.7rem; transition:transform 0.2s;"></i>
+                    </h5>
+                    <div id="orgTrendPanel">
+                        <div class="chart-container" style="height: 320px;">
+                            <canvas id="chartOrgTrend"></canvas>
+                        </div>
                     </div>
                 </div>
 
